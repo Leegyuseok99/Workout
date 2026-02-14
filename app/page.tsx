@@ -1,286 +1,198 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
+import { Dumbbell, Library, ListChecks, Plus } from "lucide-react";
 /* ===============================
    Types
 ================================ */
-interface Exercise {
-  id: number;
-  name: string;
-  description: string;
-  images: string[];
-  muscles: string[];
+interface YoutubeVideo {
+  id: string;
+  title: string;
+  thumbnail: string;
+  duration?: string;
 }
 
-interface YoutubeItem {
-  id: {
-    videoId: string;
-  };
-  snippet: {
-    title: string;
-    channelTitle: string;
-  };
-}
-
-const MUSCLE_LABEL: Record<string, string> = {
-  Chest: "가슴",
-  Shoulders: "어깨",
-  Biceps: "이두",
-  Triceps: "삼두",
-  Hamstrings: "햄스트링",
-  Calves: "종아리",
-  Glutes: "엉덩이",
-};
-
-export default function WorkoutPage() {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
-    null,
-  );
-
-  /* 🆕 유튜브 상태 */
-  const [videos, setVideos] = useState<YoutubeItem[]>([]);
-  const [videoLoading, setVideoLoading] = useState(false);
+export default function HomePage() {
+  const router = useRouter();
+  const [videos, setVideos] = useState<YoutubeVideo[]>([]);
 
   /* ===============================
-     Data Fetch
+     YouTube Fetch
+     (서버 API 경유 권장)
   ================================ */
   useEffect(() => {
-    async function fetchWorkouts() {
+    async function fetchVideos() {
       try {
-        const res = await fetch(
-          "https://wger.de/api/v2/exerciseinfo/?language=2&limit=10",
-        );
+        const res = await fetch("/api/youtube?q=운동 루틴");
         const data = await res.json();
 
-        const mapped: Exercise[] = data.results.map((item: any) => ({
-          id: item.id,
-          name:
-            item.translations?.find((t: any) => t.language === 2)?.name ??
-            "Unknown",
-          description:
-            item.translations
-              ?.find((t: any) => t.language === 2)
-              ?.description?.replace(/<[^>]*>?/gm, "")
-              .replace(/&nbsp;/g, " ")
-              .trim() ?? "",
-          images: Array.isArray(item.images)
-            ? item.images.map((i: any) => i.image)
-            : [],
-          muscles:
-            item.muscles?.map((m: any) => m.name_en).filter(Boolean) ?? [],
+        const mapped = (data.items ?? []).map((item: any) => ({
+          id: item.id.videoId,
+          title: item.snippet.title,
+          thumbnail: item.snippet.thumbnails.high.url,
         }));
 
-        setExercises(mapped);
-        setTimeout(() => setLoading(false), 800);
-      } catch (error) {
-        console.error("데이터 로딩 실패:", error);
-        setLoading(false);
-      }
-    }
-    fetchWorkouts();
-  }, []);
-
-  /* ===============================
-     YouTube Fetch (상세 모달 열릴 때)
-  ================================ */
-  useEffect(() => {
-    if (!selectedExercise) return;
-
-    async function fetchVideos() {
-      setVideoLoading(true);
-      try {
-        const keyword = `${selectedExercise.name}`;
-        const res = await fetch(
-          `/api/youtube?q=${encodeURIComponent(keyword)}`,
-        );
-        const data = await res.json();
-        setVideos(data.items?.slice(0, 2) ?? []);
+        setVideos(mapped.slice(0, 5));
       } catch (e) {
-        console.error("유튜브 로딩 실패", e);
-      } finally {
-        setVideoLoading(false);
+        console.error("영상 로딩 실패", e);
       }
     }
 
     fetchVideos();
-  }, [selectedExercise]);
-
-  /* ===============================
-     Body Scroll Lock
-  ================================ */
-  useEffect(() => {
-    document.body.style.overflow =
-      loading || isFilterModalOpen || !!selectedExercise ? "hidden" : "unset";
-  }, [loading, isFilterModalOpen, selectedExercise]);
-
-  /* ===============================
-     Filter + Search
-  ================================ */
-  const filteredExercises = exercises.filter((ex) => {
-    const matchMuscle = selectedMuscle
-      ? ex.muscles.includes(selectedMuscle)
-      : true;
-
-    const matchSearch = ex.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-
-    return matchMuscle && matchSearch;
-  });
+  }, []);
 
   return (
-    <div className="relative min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-blue-900/20">
       {/* ===============================
-          Splash Screen
+          Header
       ================================ */}
-      <div
-        className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white transition-transform duration-[1000ms] ${
-          !loading ? "-translate-y-full" : ""
-        }`}
-      >
-        <p className="text-xl font-black text-blue-600 animate-pulse">
-          원판 정리 하는 중...
-        </p>
-      </div>
-
-      {/* ===============================
-          Main Content
-      ================================ */}
-      <div
-        className={`max-w-6xl mx-auto p-6 transition-opacity ${
-          loading ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        {/* Header */}
-        <header className="text-center mb-10 mt-10">
-          <h1 className="text-4xl font-black mb-6">운동 라이브러리</h1>
-
-          <input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="운동 이름 검색"
-            className="max-w-md w-full px-5 py-4 rounded-2xl border mb-6"
-          />
-
-          <button
-            onClick={() => setIsFilterModalOpen(true)}
-            className="px-8 py-3 bg-blue-600 text-white font-bold rounded-2xl"
-          >
-            {selectedMuscle
-              ? `필터: ${MUSCLE_LABEL[selectedMuscle]}`
-              : "운동 부위 선택하기"}
-          </button>
-        </header>
-
-        {/* ===============================
-            Detail Modal
-        ================================ */}
-        {selectedExercise && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-black/70"
-              onClick={() => setSelectedExercise(null)}
-            />
-            <div className="relative bg-white max-w-3xl w-full rounded-3xl overflow-hidden max-h-[90vh] overflow-y-auto">
-              {/* 이미지 */}
-              <div className="h-64 bg-slate-100 flex items-center justify-center">
-                {selectedExercise.images[0] ? (
-                  <img
-                    src={selectedExercise.images[0]}
-                    alt={selectedExercise.name}
-                    className="object-contain w-full h-full"
-                  />
-                ) : (
-                  <span className="text-7xl">🏋️</span>
-                )}
+      <header className="border-b border-purple-200/50 dark:border-purple-800/30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-lg">
+                <Dumbbell className="size-6 text-white" />
               </div>
-
-              {/* 내용 */}
-              <div className="p-8 space-y-10">
-                {/* 설명 */}
-                <section>
-                  <h2 className="text-3xl font-black mb-4">
-                    {selectedExercise.name}
-                  </h2>
-                  <p className="text-slate-600 leading-relaxed">
-                    {selectedExercise.description ||
-                      "이 운동에 대한 설명이 없습니다."}
-                  </p>
-                </section>
-
-                {/* 🆕 운동 루틴 영상 */}
-                <section>
-                  <h3 className="text-2xl font-black mb-4">운동 루틴 영상</h3>
-
-                  {videoLoading && (
-                    <p className="text-slate-400">영상 불러오는 중...</p>
-                  )}
-
-                  <div className="grid gap-6">
-                    {videos.map((v) => (
-                      <div
-                        key={v.id.videoId}
-                        className="rounded-xl overflow-hidden shadow"
-                      >
-                        <iframe
-                          src={`https://www.youtube.com/embed/${v.id.videoId}`}
-                          allowFullScreen
-                          className="w-full aspect-video"
-                        />
-                        <div className="p-3">
-                          <p className="font-bold text-sm line-clamp-2">
-                            {v.snippet.title}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {v.snippet.channelTitle}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  My Workout Routine
+                </h1>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      </header>
+      <main className="container mx-auto px-10">
+        {/* ===============================
+          Daily Report Card
+      ================================ */}
+        <section
+          onClick={() => router.push("/routines/active")}
+          className="cursor-pointer rounded-3xl p-6 mt-8 mb-10 text-white shadow-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"
+        >
+          <div className="inline-block mb-4 px-4 py-1 rounded-full bg-white/20 text-sm">
+            진행중인 운동 달성률을 확인하세요!
+          </div>
+
+          <h2 className="text-xl font-bold mb-1">chest</h2>
+          <p className="text-sm opacity-80 mb-4">2026년 2월 7일 (금)</p>
+
+          <div className="h-2 bg-white/30 rounded-full overflow-hidden mb-3">
+            <div className="h-full w-0 bg-white rounded-full" />
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span className="text-sm opacity-80">1개 운동 중 0개 완료</span>
+            <span className="text-3xl font-black">0%</span>
+          </div>
+        </section>
 
         {/* ===============================
-            Exercise List
-        ================================ */}
-        <div className="grid gap-6">
-          {filteredExercises.map((ex) => (
-            <div
-              key={ex.id}
-              onClick={() => setSelectedExercise(ex)}
-              className="bg-white rounded-3xl p-6 shadow border cursor-pointer flex gap-6"
-            >
-              <div className="w-24 h-24 bg-slate-50 rounded-2xl flex items-center justify-center">
-                {ex.images[0] ? (
-                  <img
-                    src={ex.images[0]}
-                    alt={ex.name}
-                    className="object-contain w-full h-full"
-                  />
-                ) : (
-                  <span className="text-3xl">🏋️</span>
-                )}
-              </div>
-              <div>
-                <h2 className="text-xl font-bold">{ex.name}</h2>
-                <p className="text-sm text-slate-500 line-clamp-2">
-                  {ex.description}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+          Today Check-in
+      ================================ */}
+        <section className="mb-12">
+          <h2 className="text-lg font-black mb-4">Exercise</h2>
+
+          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+            <CheckButton
+              label="내 루틴"
+              onClick={() => router.push("/routines")}
+              icon={
+                <div className="size-12 mx-auto mb-3 rounded-2xl bg-green-500 flex items-center justify-center shadow-lg">
+                  <ListChecks className="size-6 text-white" />
+                </div>
+              }
+            />
+            <CheckButton
+              label="라이브러리"
+              onClick={() => router.push("/workout")}
+              icon={
+                <div className="size-12 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg">
+                  <Library className="size-6 text-white" />
+                </div>
+              }
+            />
+            <CheckButton
+              label="루틴 만들기"
+              onClick={() => router.push("/create")}
+              icon={
+                <div className="size-12 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-lg">
+                  <Plus className="size-6 text-white" />
+                </div>
+              }
+            />
+          </div>
+        </section>
+
+        {/* ===============================
+          Recommended Videos
+      ================================ */}
+        <section>
+          <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+            <span className="text-red-500">▶</span> 추천 운동 영상
+            <span className="text-sm text-slate-400">총 {videos.length}개</span>
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {videos.map((v, idx) => (
+              <a
+                key={v.id}
+                href={`https://www.youtube.com/watch?v=${v.id}`}
+                target="_blank"
+                className={`relative rounded-3xl overflow-hidden shadow-lg group ${
+                  idx === 0 ? "md:col-span-2 md:row-span-2" : ""
+                }`}
+              >
+                <img
+                  src={v.thumbnail}
+                  alt={v.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition"
+                />
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+                <div className="absolute bottom-4 left-4 right-4 text-white">
+                  <p className="font-bold line-clamp-2">{v.title}</p>
+                </div>
+
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                  <div className="w-16 h-16 rounded-full bg-white/80 flex items-center justify-center">
+                    ▶
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      </main>
     </div>
+  );
+}
+
+/* ===============================
+   Components
+================================ */
+function CheckButton({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-3xl p-6 flex flex-col items-center gap-03
+             shadow-sm transition-transform duration-200
+             bg-white hover:scale-105
+             dark:bg-gray-800"
+    >
+      <div className="text-2xl">{icon}</div>
+      <span className="text-sm font-medium text-gray-700">{label}</span>
+    </button>
   );
 }
