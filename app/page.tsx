@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Dumbbell, Library, ListChecks, Plus } from "lucide-react";
+import Header from "../components/Header";
 /* ===============================
    Types
 ================================ */
@@ -34,7 +35,7 @@ export default function HomePage() {
           thumbnail: item.snippet.thumbnails.high.url,
         }));
 
-        setVideos(mapped.slice(0, 5));
+        setVideos(mapped.slice(0, 6));
       } catch (e) {
         console.error("영상 로딩 실패", e);
       }
@@ -45,25 +46,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-blue-900/20">
-      {/* ===============================
-          Header
-      ================================ */}
-      <header className="border-b border-purple-200/50 dark:border-purple-800/30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-lg">
-                <Dumbbell className="size-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  My Workout Routine
-                </h1>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header title="My Workout Routine" />
       <main className="container mx-auto px-10">
         {/* ===============================
           Daily Report Card
