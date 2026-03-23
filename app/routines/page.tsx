@@ -43,6 +43,16 @@ export default function RoutinesPage() {
     const updated = routines.filter((r) => r.id !== deleteTarget.id);
     setRoutines(updated);
     localStorage.setItem("savedRoutines", JSON.stringify(updated));
+
+    const active = localStorage.getItem("activeWorkout");
+    if (active) {
+      const parsed = JSON.parse(active);
+
+      if (parsed.routine.id === deleteTarget.id) {
+        localStorage.removeItem("activeWorkout");
+      }
+    }
+
     setDeleteTarget(null);
   }
 
@@ -50,10 +60,27 @@ export default function RoutinesPage() {
      시작하기
   ================================ */
   function startRoutine(routine: SavedRoutine) {
-    localStorage.setItem("activeRoutine", JSON.stringify(routine));
+    const normalizedExercises = routine.exercises.map((ex) => ({
+      ...ex,
+      reps: Array.isArray(ex.reps)
+        ? ex.reps
+        : Array.from({ length: ex.sets }, () => ex.reps),
+    }));
+
+    const activeState = {
+      routine: {
+        ...routine,
+        exercises: normalizedExercises,
+      },
+      currentExerciseIndex: 0,
+      completedSets: normalizedExercises.map(() => 0),
+      elapsedTime: 0,
+      startedAt: Date.now(),
+    };
+
+    localStorage.setItem("activeWorkout", JSON.stringify(activeState));
     router.push("/routines/active");
   }
-
   const isEmpty = routines.length === 0;
 
   return (

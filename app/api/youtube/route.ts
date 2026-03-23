@@ -1,22 +1,30 @@
 import { NextResponse } from "next/server";
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
-
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const q = searchParams.get("q");
 
-  if (!q) {
-    return NextResponse.json({ items: [] });
+  const query = searchParams.get("q") ?? "운동 루틴";
+  const pageToken = searchParams.get("pageToken");
+
+  const API_KEY = process.env.YOUTUBE_API_KEY;
+
+  const url = new URL("https://www.googleapis.com/youtube/v3/search");
+
+  url.searchParams.set("part", "snippet");
+  url.searchParams.set("q", query);
+  url.searchParams.set("type", "video");
+  url.searchParams.set("maxResults", "6");
+  url.searchParams.set("key", API_KEY!);
+
+  if (pageToken) {
+    url.searchParams.set("pageToken", pageToken);
   }
 
-  const res = await fetch(
-    `https://www.googleapis.com/youtube/v3/search?` +
-      `part=snippet&type=video&maxResults=5&q=${encodeURIComponent(q)}` +
-      `&key=${YOUTUBE_API_KEY}`,
-  );
-
+  const res = await fetch(url.toString());
   const data = await res.json();
 
-  return NextResponse.json(data);
+  return NextResponse.json({
+    items: data.items ?? [],
+    nextPageToken: data.nextPageToken ?? null,
+  });
 }

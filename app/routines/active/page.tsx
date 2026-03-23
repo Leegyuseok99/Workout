@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -11,15 +11,17 @@ import {
   Minus,
   CheckCircle2,
   Circle,
+  Check,
 } from "lucide-react";
 import Header from "../../../components/Header";
+import ToastItem from "../../../components/ToastItem";
 import { useRef } from "react";
 
 interface RoutineExercise {
   id: number;
   name: string;
   sets: number;
-  reps: number;
+  reps: number[];
   rest: number;
 }
 
@@ -39,24 +41,39 @@ export default function ActiveRoutinePage() {
   const [restTime, setRestTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [initialRestTime, setInitialRestTime] = useState(0);
+  const [isRoutineFinished, setIsRoutineFinished] = useState(false);
 
-  const [toast, setToast] = useState(false);
+  const [toast, setToast] = useState<{
+    show: boolean;
+    message: string;
+  }>({ show: false, message: "" });
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isToastMounted, setIsToastMounted] = useState(false);
+
+  const restIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [elapsedTime, setElapsedTime] = useState(0); // 전체 운동 시간 (초)
+  const [isWorkoutRunning, setIsWorkoutRunning] = useState(true);
+  const workoutIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /* ===============================
      루틴 불러오기
   ================================ */
   useEffect(() => {
-    const stored = localStorage.getItem("activeRoutine");
+    const stored = localStorage.getItem("activeWorkout");
+
     if (!stored) {
       router.push("/routines");
       return;
     }
 
-    const parsed: SavedRoutine = JSON.parse(stored);
-    setRoutine(parsed);
-    setCompletedSets(Array(parsed.exercises.length).fill(0));
+    const parsed = JSON.parse(stored);
+
+    setRoutine(parsed.routine);
+    setCurrentExerciseIndex(parsed.currentExerciseIndex);
+    setCompletedSets(parsed.completedSets);
+    setElapsedTime(parsed.elapsedTime);
   }, []);
 
   /* ===============================
@@ -65,25 +82,113 @@ export default function ActiveRoutinePage() {
   useEffect(() => {
     if (!showRest || isPaused || restTime <= 0) return;
 
-    intervalRef.current = setInterval(() => {
+    restIntervalRef.current = setInterval(() => {
       setRestTime((prev) => prev - 1);
     }, 1000);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (restIntervalRef.current) {
+        clearInterval(restIntervalRef.current);
+        restIntervalRef.current = null;
       }
     };
   }, [showRest, isPaused, restTime]);
 
   useEffect(() => {
+    if (toast.show) {
+      setIsToastMounted(true);
+    } else {
+      const timer = setTimeout(() => {
+        setIsToastMounted(false);
+      }, 300); // slideOut duration과 동일하게
+
+      return () => clearTimeout(timer);
+    }
+  }, [toast.show]);
+
+  /* ===============================
+   전체 운동 타이머
+================================ */
+  useEffect(() => {
+    if (!isWorkoutRunning) return;
+
+    workoutIntervalRef.current = setInterval(() => {
+      setElapsedTime((prev) => prev + 1);
+    }, 1000);
+
+    return () => {
+      if (workoutIntervalRef.current) {
+        clearInterval(workoutIntervalRef.current);
+        workoutIntervalRef.current = null;
+      }
+    };
+  }, [isWorkoutRunning]);
+
+  useEffect(() => {
     if (restTime === 0 && showRest) {
+      notifyRestFinished();
+
       setShowRest(false);
       setIsPaused(false);
+      showToast("휴식이 종료되었습니다! 다음 세트를 시작하세요 💪");
     }
   }, [restTime, showRest]);
 
+  useEffect(() => {
+    if (!routine) return;
+
+    const activeState = {
+      routine,
+      currentExerciseIndex,
+      completedSets,
+      elapsedTime,
+      startedAt: Date.now(),
+    };
+
+    localStorage.setItem("activeWorkout", JSON.stringify(activeState));
+  }, [routine, currentExerciseIndex, completedSets, elapsedTime]);
+
+  useEffect(() => {
+    return () => {
+      if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+      if (workoutIntervalRef.current) clearInterval(workoutIntervalRef.current);
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
+  const currentExercise = useMemo(() => {
+    if (!routine) return null;
+    return routine.exercises[currentExerciseIndex];
+  }, [routine, currentExerciseIndex]);
+
+  /* ===============================
+     전체 진행도 계산
+  ================================ */
+  const totalSets = useMemo(() => {
+    if (!routine) return 0;
+    return routine.exercises.reduce((sum, ex) => sum + ex.sets, 0);
+  }, [routine]);
+
+  const totalCompleted = useMemo(() => {
+    return completedSets.reduce((sum, value) => sum + value, 0);
+  }, [completedSets]);
+
+  const progressPercent = useMemo(() => {
+    return totalSets === 0 ? 0 : (totalCompleted / totalSets) * 100;
+  }, [totalCompleted, totalSets]);
+
+  const restProgressPercent = useMemo(() => {
+    if (initialRestTime <= 0) return 0;
+    return Math.max(Math.min((restTime / initialRestTime) * 100, 100), 0);
+  }, [restTime, initialRestTime]);
+
+  if (!routine || !currentExercise) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        루틴 불러오는 중...
+      </div>
+    );
+  }
   const minutes = Math.floor(restTime / 60);
   const seconds = restTime % 60;
 
@@ -119,18 +224,232 @@ export default function ActiveRoutinePage() {
   }
   function resetRest() {
     setRestTime(currentExercise.rest);
+    setInitialRestTime(currentExercise.rest);
     setIsPaused(false);
   }
-  // 🔥 모든 Hook 아래에서 return 처리
-  if (!routine) {
+  /* ===============================
+     세트 수정
+  ================================ */
+  function addSet() {
+    if (!routine) return;
+
+    const updatedRoutine: SavedRoutine = {
+      ...routine,
+      exercises: routine.exercises.map((ex, idx) => {
+        if (idx !== currentExerciseIndex) return ex;
+
+        const newReps = [...ex.reps, ex.reps[ex.reps.length - 1] || 10];
+
+        return {
+          ...ex,
+          sets: ex.sets + 1,
+          reps: newReps,
+        };
+      }),
+    };
+
+    // completedSets도 같이 동기화
+    const newCompletedSets = [...completedSets];
+    newCompletedSets[currentExerciseIndex] = Math.min(
+      newCompletedSets[currentExerciseIndex],
+      updatedRoutine.exercises[currentExerciseIndex].sets,
+    );
+
+    setRoutine(updatedRoutine);
+    setCompletedSets(newCompletedSets);
+
+    localStorage.setItem("activeWorkout", JSON.stringify(updatedRoutine));
+
+    showToast("세트가 추가되었습니다 💪");
+  }
+
+  function removeSet() {
+    if (!routine) return;
+
+    const current = routine.exercises[currentExerciseIndex];
+    if (current.sets <= 1) return;
+
+    const updatedRoutine: SavedRoutine = {
+      ...routine,
+      exercises: routine.exercises.map((ex, idx) => {
+        if (idx !== currentExerciseIndex) return ex;
+
+        const newReps = ex.reps.slice(0, -1);
+
+        return {
+          ...ex,
+          sets: ex.sets - 1,
+          reps: newReps,
+        };
+      }),
+    };
+
+    const newCompletedSets = [...completedSets];
+    newCompletedSets[currentExerciseIndex] = Math.min(
+      newCompletedSets[currentExerciseIndex],
+      updatedRoutine.exercises[currentExerciseIndex].sets,
+    );
+
+    setRoutine(updatedRoutine);
+    setCompletedSets(newCompletedSets);
+
+    saveActiveWorkout(updatedRoutine);
+    showToast("세트가 삭제되었습니다");
+  }
+
+  /* ===============================
+     반복 횟수 수정
+  ================================ */
+  function updateReps(setIndex: number, delta: number) {
+    if (!routine) return;
+
+    const updatedRoutine = {
+      ...routine,
+      exercises: routine.exercises.map((ex, idx) => {
+        if (idx !== currentExerciseIndex) return ex;
+
+        const newReps = [...ex.reps];
+        newReps[setIndex] = Math.max(1, newReps[setIndex] + delta);
+
+        return {
+          ...ex,
+          reps: newReps,
+        };
+      }),
+    };
+
+    setRoutine(updatedRoutine);
+
+    // 🔥 localStorage 자동 저장
+    saveActiveWorkout(updatedRoutine);
+  }
+
+  const workoutHours = Math.floor(elapsedTime / 3600);
+  const workoutMinutes = Math.floor((elapsedTime % 3600) / 60);
+  const workoutSeconds = elapsedTime % 60;
+
+  function saveActiveWorkout(updatedRoutine: SavedRoutine) {
+    const activeState = {
+      routine: updatedRoutine,
+      currentExerciseIndex,
+      completedSets,
+      elapsedTime,
+      startedAt: Date.now(),
+    };
+
+    localStorage.setItem("activeWorkout", JSON.stringify(activeState));
+  }
+  /* ===============================
+     운동 완료 데이터 저장 
+  ================================ */
+  const saveWorkoutDate = () => {
+    const today = new Date().toISOString().split("T")[0];
+
+    const saved = localStorage.getItem("workout-history");
+
+    let history = saved ? JSON.parse(saved) : [];
+
+    if (!history.includes(today)) {
+      history.push(today);
+    }
+
+    localStorage.setItem("workout-history", JSON.stringify(history));
+  };
+  function saveWorkoutHistory(routine: SavedRoutine) {
+    const today = new Date().toLocaleDateString("sv-SE");
+
+    const stored = localStorage.getItem("workout-history");
+    const history = stored ? JSON.parse(stored) : {};
+
+    if (!history[today]) {
+      history[today] = [];
+    }
+
+    history[today].push({
+      routineName: routine.name,
+      completedAt: new Date().toISOString(),
+
+      exercises: routine.exercises.map((ex) => ({
+        name: ex.name,
+        sets: ex.sets,
+      })),
+    });
+
+    localStorage.setItem("workout-history", JSON.stringify(history));
+  }
+
+  if (isRoutineFinished && routine) {
+    const totalSets = routine.exercises.reduce((sum, ex) => sum + ex.sets, 0);
+
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        루틴 불러오는 중...
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="bg-white rounded-3xl shadow-lg p-10 max-w-lg w-full text-center space-y-6">
+          <div className="text-6xl">🏆</div>
+
+          <h2 className="text-3xl font-bold">운동 완료!</h2>
+
+          <div className="text-gray-500 space-y-1">
+            <p className="text-lg font-semibold mt-2 text-black">
+              총 운동 시간 : {workoutHours > 0 && `${workoutHours}시간 `}
+              {workoutMinutes}분 {workoutSeconds}초
+            </p>
+            <p>{routine.name} 루틴을 완료했습니다</p>
+            <p>총 {totalSets}세트를 완료했습니다</p>
+          </div>
+
+          <div className="space-y-3 mt-6">
+            {routine.exercises.map((ex) => (
+              <div
+                key={ex.id}
+                className="flex justify-between bg-gray-100 px-4 py-3 rounded-xl"
+              >
+                <span>{ex.name}</span>
+                <span>
+                  {ex.sets}/{ex.sets} 세트
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem("activeWorkout");
+              setCompletedSets([]);
+              setCurrentExerciseIndex(0);
+              router.push("/routines");
+              saveWorkoutDate;
+            }}
+            className="mt-6 bg-black text-white px-6 py-3 rounded-xl hover:opacity-90"
+          >
+            완료
+          </button>
+        </div>
       </div>
     );
   }
+  /* ===============================
+     toast 창 
+  ================================ */
+  function showToast(message: string) {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
 
-  const currentExercise = routine.exercises[currentExerciseIndex];
+    setIsToastMounted(true);
+
+    requestAnimationFrame(() => {
+      setToast({ show: true, message });
+    });
+
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+
+      setTimeout(() => {
+        setIsToastMounted(false);
+      }, 300);
+    }, 2500);
+  }
+
   /* ===============================
      세트 완료 처리
   ================================ */
@@ -138,32 +457,78 @@ export default function ActiveRoutinePage() {
     const newCompleted = [...completedSets];
 
     if (newCompleted[currentExerciseIndex] >= currentExercise.sets) return;
-    if (newCompleted[currentExerciseIndex] < currentExercise.sets) {
-      setRestTime(currentExercise.rest);
-      setInitialRestTime(currentExercise.rest);
-      setShowRest(true);
-    }
+
     newCompleted[currentExerciseIndex] += 1;
     setCompletedSets(newCompleted);
 
-    // 토스트 표시
-    setToast(true);
-    setTimeout(() => setToast(false), 2000);
+    const isLastSet =
+      newCompleted[currentExerciseIndex] === currentExercise.sets;
 
-    // 모든 세트 완료 시 휴식 시작
-    if (newCompleted[currentExerciseIndex] < currentExercise.sets) {
-      setRestTime(currentExercise.rest);
-      setShowRest(true);
+    const isLastExercise =
+      currentExerciseIndex === routine.exercises.length - 1;
+
+    //  마지막 세트
+    if (isLastSet) {
+      if (isLastExercise) {
+        setTimeout(() => {
+          setIsWorkoutRunning(false);
+
+          // ✅ 운동 기록 저장 추가
+          saveWorkoutHistory(routine);
+
+          setIsRoutineFinished(true);
+          showToast("🎉 루틴이 모두 완료되었습니다!");
+        }, 500);
+        return;
+      }
+
+      // 다음 운동으로 자동 이동
+      setTimeout(() => {
+        setCurrentExerciseIndex((prev) => prev + 1);
+        setShowRest(true);
+        setRestTime(currentExercise.rest);
+      }, 1000);
+
+      return;
+    }
+
+    // 일반 세트 완료 → 휴식 시작
+    setRestTime(currentExercise.rest);
+    setInitialRestTime(currentExercise.rest);
+    setShowRest(true);
+
+    showToast("세트가 완료 되었습니다!");
+  }
+  /* ===============================
+      휴식완료 이벤트
+  ================================ */
+  function notifyRestFinished() {
+    // 모바일 진동 (지원 브라우저만 동작)
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate([300, 100, 300, 100, 300]); // 진동 → 멈춤 → 진동
+    }
+
+    //  소리 알림
+    try {
+      const audio = new Audio("/rest-finish.wav");
+      audio.volume = 1;
+      audio.play();
+    } catch (e) {
+      console.log("Audio play blocked:", e);
     }
   }
-
   /* ===============================
      운동 이동
   ================================ */
   function skipRest() {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (restIntervalRef.current) {
+      clearInterval(restIntervalRef.current);
+      restIntervalRef.current = null;
+    }
+
     setShowRest(false);
     setRestTime(0);
+    showToast("휴식 시간을 건너뛰었습니다. 다음 세트를 준비하세요!");
   }
   function nextExercise() {
     if (currentExerciseIndex < routine.exercises.length - 1) {
@@ -171,6 +536,7 @@ export default function ActiveRoutinePage() {
     }
     setShowRest(false);
     setRestTime(0);
+    showToast("다음 운동으로 이동했습니다!");
   }
 
   function prevExercise() {
@@ -179,26 +545,12 @@ export default function ActiveRoutinePage() {
     }
     setShowRest(false);
     setRestTime(0);
+    showToast("이전 운동으로 이동했습니다!");
   }
-
-  /* ===============================
-     전체 진행도 계산
-  ================================ */
-  const totalSets = routine.exercises.reduce((sum, ex) => sum + ex.sets, 0);
-
-  const totalCompleted = completedSets.reduce((sum, value) => sum + value, 0);
-
-  const progressPercent = (totalCompleted / totalSets) * 100;
-
-  const restProgressPercent =
-    initialRestTime <= 0
-      ? 0
-      : Math.max(Math.min((restTime / initialRestTime) * 100, 100), 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header title="루틴 진행" />
-
       <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">
         {/* 상단 정보 */}
         <div className="bg-white rounded-2xl p-6 shadow-sm">
@@ -236,7 +588,9 @@ export default function ActiveRoutinePage() {
             </div>
 
             <div className="bg-gray-100 p-4 rounded-xl">
-              <p className="text-2xl font-bold">{currentExercise.reps}</p>
+              <p className="text-2xl font-bold">
+                {currentExercise.reps[completedSets[currentExerciseIndex] || 0]}
+              </p>
               <p className="text-sm text-gray-500">반복</p>
             </div>
 
@@ -250,24 +604,60 @@ export default function ActiveRoutinePage() {
           <div className="space-y-4">
             <p className="font-semibold">세트 진행</p>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap justify-evenly gap-3">
               {Array.from({ length: currentExercise.sets }).map((_, i) => (
                 <div
                   key={i}
-                  className={`flex px-4 py-2 rounded-xl border ${
+                  className={`flex items-center gap-3 px-4 py-2 rounded-xl border ${
                     i < completedSets[currentExerciseIndex]
                       ? "border-green-300 bg-green-50"
                       : "bg-gray-100"
                   }`}
                 >
                   {i < completedSets[currentExerciseIndex] ? (
-                    <CheckCircle2 className="me-2 text-green-500"></CheckCircle2>
+                    <CheckCircle2 className="text-green-500" />
                   ) : (
-                    <Circle className="me-2"></Circle>
+                    <Circle />
                   )}
-                  세트 {i + 1}
+
+                  <span>세트 {i + 1}</span>
+
+                  <button
+                    onClick={() => updateReps(i, -1)}
+                    disabled={i < completedSets[currentExerciseIndex]}
+                    className="px-2 border rounded hover:bg-gray-200 disabled:opacity-30"
+                  >
+                    -
+                  </button>
+
+                  <span className="font-semibold">
+                    {currentExercise.reps[i]}회
+                  </span>
+
+                  <button
+                    onClick={() => updateReps(i, 1)}
+                    disabled={i < completedSets[currentExerciseIndex]}
+                    className="px-2 border rounded hover:bg-gray-200 disabled:opacity-30"
+                  >
+                    +
+                  </button>
                 </div>
               ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={removeSet}
+                className="flex-1 py-2 border rounded-xl hover:bg-gray-100"
+              >
+                세트 -
+              </button>
+
+              <button
+                onClick={addSet}
+                className="flex-1 py-2 bg-black text-white rounded-xl hover:opacity-90"
+              >
+                세트 +
+              </button>
             </div>
 
             {!showRest ? (
@@ -407,7 +797,7 @@ export default function ActiveRoutinePage() {
                   <div>
                     <p className="font-medium">{ex.name}</p>
                     <p className="text-sm text-gray-500">
-                      {ex.sets} x {ex.reps}
+                      {ex.reps.join(" / ")}
                     </p>
                   </div>
                 </div>
@@ -419,6 +809,21 @@ export default function ActiveRoutinePage() {
           </div>
         </div>
       </main>
+      {/* Toast */}
+      {isToastMounted && (
+        <ToastItem message={toast.message} isVisible={toast.show} />
+      )}
+      {/* 전체 운동 타이머 Sticky */}
+      {!isRoutineFinished && (
+        <div className="fixed bottom-0 left-0 w-full bg-white py-3 text-center shadow-lg z-40 opacity-80">
+          <p className="font-semibold text-sm tracking-wide">운동 시간</p>
+          <p className="text-lg font-bold">
+            {workoutHours > 0 && `${workoutHours}:`}
+            {workoutMinutes.toString().padStart(2, "0")}:
+            {workoutSeconds.toString().padStart(2, "0")}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

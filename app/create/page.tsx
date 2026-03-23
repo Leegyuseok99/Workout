@@ -15,8 +15,9 @@ import {
 import { Dumbbell, ChevronLeft, Plus, Check } from "lucide-react";
 import SortableItem from "../../components/SortableItem";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Header from "../../components/Header";
+import ToastItem from "../../components/ToastItem";
 
 interface Exercise {
   id: number;
@@ -41,10 +42,17 @@ export default function CreateRoutinePage() {
 
   const [routineName, setRoutineName] = useState("");
   const [exercises, setExercises] = useState<RoutineExercise[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<RoutineExercise | null>(
+    null,
+  );
+
   const [toast, setToast] = useState<{
     show: boolean;
     message: string;
   }>({ show: false, message: "" });
+
+  const [isToastMounted, setIsToastMounted] = useState(false);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -70,39 +78,60 @@ export default function CreateRoutinePage() {
   /* ===============================
      값 수정
   ================================ */
-  function updateExercise(
-    id: number,
-    field: "sets" | "reps" | "rest",
-    value: number,
-  ) {
-    setExercises((prev) =>
-      prev.map((ex) => (ex.id === id ? { ...ex, [field]: value } : ex)),
-    );
-  }
-  /* ===============================
-     위치 조정
-  ================================ */
-  function handleDragEnd(event: any) {
-    const { active, over } = event;
-
-    if (active.id !== over?.id) {
-      setExercises((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  }
+  const updateExercise = useCallback(
+    (id: number, field: "sets" | "reps" | "rest", value: number) => {
+      setExercises((prev) =>
+        prev.map((ex) => (ex.id === id ? { ...ex, [field]: value } : ex)),
+      );
+    },
+    [],
+  );
 
   /* ===============================
      삭제
   ================================ */
-  function removeExercise(id: number) {
-    const updated = exercises.filter((ex) => ex.id !== id);
+  const removeExercise = useCallback(
+    (id: number) => {
+      setDeleteTarget((prev) => {
+        return exercises.find((ex) => ex.id === id) ?? null;
+      });
+    },
+    [exercises],
+  );
+
+  /* ===============================
+     위치 조정
+  ================================ */
+  const handleDragEnd = useCallback((event: any) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    setExercises((items) => {
+      const oldIndex = items.findIndex((item) => item.id === active.id);
+      const newIndex = items.findIndex((item) => item.id === over.id);
+
+      return arrayMove(items, oldIndex, newIndex);
+    });
+  }, []);
+  function confirmDelete() {
+    if (!deleteTarget) return;
+
+    const updated = exercises.filter((ex) => ex.id !== deleteTarget.id);
+
     setExercises(updated);
     localStorage.setItem("routineExercises", JSON.stringify(updated));
+
+    setDeleteTarget(null);
   }
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   /* ===============================
      초기화
@@ -133,18 +162,30 @@ export default function CreateRoutinePage() {
       JSON.stringify([...parsed, newRoutine]),
     );
 
-    // 임시 운동 목록 제거
     localStorage.removeItem("routineExercises");
 
     // Toast 표시
-    setToast({
-      show: true,
-      message: `"${routineName}" 루틴이 저장되었습니다!`,
+    showToast(`"${routineName}" 루틴이 저장되었습니다!`, () => {
+      router.push("/");
     });
+  }
 
-    setTimeout(() => {
-      setToast({ show: false, message: "" });
-      router.push("/"); // 필요하면 이동
+  function showToast(message: string, callback?: () => void) {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+
+    setToast({ show: true, message });
+    setIsToastMounted(true);
+
+    toastTimerRef.current = setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+
+      setTimeout(() => {
+        setIsToastMounted(false);
+
+        if (callback) callback();
+      }, 300); // 애니메이션 시간
     }, 2500);
   }
 
@@ -238,24 +279,49 @@ export default function CreateRoutinePage() {
           </button>
         </section>
 
-        {/* ===============================
-         Toast UI
-      ================================ */}
-        {toast.show && (
-          <div className="fixed bottom-6 right-6 animate-slideIn bg-white shadow-2xl rounded-2xl px-6 py-4 flex items-center gap-3 border">
-            <div className="size-5 bg-black text-white rounded-full flex items-center justify-center">
-              <Check className="size-3" />
-            </div>
-            <p className="text-sm font-semibold">{toast.message}</p>
-            <button
-              onClick={() => router.push("/routines")}
-              className="ml-4 px-3 py-1 bg-black text-white text-xs rounded-lg"
-            >
-              내 루틴 보기
-            </button>
-          </div>
+        {/* Toast UI */}
+        {isToastMounted && (
+          <ToastItem message={toast.message} isVisible={toast.show} />
         )}
       </main>
+      {/* ===============================
+          삭제 확인 모달
+      ================================ */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          {/* 배경 */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setDeleteTarget(null)}
+          />
+
+          {/* 모달 */}
+          <div className="relative bg-white w-[420px] rounded-2xl shadow-2xl p-6">
+            <h3 className="text-lg font-bold mb-3">운동 삭제</h3>
+
+            <p className="text-sm text-gray-600 mb-6">
+              "{deleteTarget.name}" 운동을 루틴에서 삭제하시겠습니까?
+              <br />이 작업은 되돌릴 수 없습니다.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 rounded-lg border bg-gray-100 hover:bg-gray-200 transition"
+              >
+                취소
+              </button>
+
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

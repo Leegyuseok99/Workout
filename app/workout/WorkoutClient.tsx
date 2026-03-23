@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Dumbbell, Plus, Check } from "lucide-react";
+import { Plus, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Header from "../../components/Header";
+import ExerciseCard from "../../components/ExerciseCard";
+import ToastItem from "../../components/ToastItem";
 
 /* ===============================
    Types
@@ -43,6 +45,10 @@ const MUSCLE_LABEL: Record<string, string> = {
 
 export default function WorkoutClient({ initialExercises }) {
   const [exercises, setExercises] = useState(initialExercises);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const observerRef = React.useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -64,10 +70,15 @@ export default function WorkoutClient({ initialExercises }) {
   ================================ */
   useEffect(() => {
     async function fetchWorkouts() {
+      if (!hasMore || loadingMore) return;
+
+      setLoadingMore(true);
+
       try {
         const res = await fetch(
-          "https://wger.de/api/v2/exerciseinfo/?language=2&limit=10",
+          `https://wger.de/api/v2/exerciseinfo/?language=2&limit=10&offset=${page * 10}`,
         );
+
         const data = await res.json();
 
         const mapped: Exercise[] = data.results.map((item: any) => ({
@@ -88,15 +99,27 @@ export default function WorkoutClient({ initialExercises }) {
             item.muscles?.map((m: any) => m.name_en).filter(Boolean) ?? [],
         }));
 
-        setExercises(mapped);
-        setTimeout(() => setLoading(false), 800);
+        setExercises((prev) => {
+          const newItems = mapped.filter(
+            (newEx) => !prev.some((ex) => ex.id === newEx.id),
+          );
+          return [...prev, ...newItems];
+        });
+
+        // 더 이상 데이터 없으면 멈춤
+        if (!data.next) {
+          setHasMore(false);
+        }
       } catch (error) {
         console.error("데이터 로딩 실패:", error);
+      } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
     }
+
     fetchWorkouts();
-  }, []);
+  }, [page]);
 
   /* ===============================
      YouTube Fetch (상세 모달 열릴 때)
@@ -126,7 +149,22 @@ export default function WorkoutClient({ initialExercises }) {
 
     fetchVideos();
   }, [selectedExercise]);
+  useEffect(() => {
+    if (!observerRef.current || !hasMore) return;
 
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setPage((prev) => prev + 1);
+        }
+      },
+      { threshold: 1 },
+    );
+
+    observer.observe(observerRef.current);
+
+    return () => observer.disconnect();
+  }, [hasMore]);
   /* ===============================
      Body Scroll Lock
   ================================ */
@@ -149,6 +187,14 @@ export default function WorkoutClient({ initialExercises }) {
 
     return matchMuscle && matchSearch;
   });
+
+  const handleSelect = React.useCallback((ex) => {
+    setSelectedExercise(ex);
+  }, []);
+
+  const handleAdd = React.useCallback((ex) => {
+    addToRoutine(ex);
+  }, []);
 
   function showToast(message: string) {
     const id = Date.now();
@@ -343,93 +389,34 @@ export default function WorkoutClient({ initialExercises }) {
         ================================ */}
         <div className="grid gap-6">
           {filteredExercises.map((ex) => (
-            <div
+            <ExerciseCard
               key={ex.id}
-              onClick={() => setSelectedExercise(ex)}
-              className="relative group bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex gap-6 hover:scale-105 duration-300 dark:bg-gray-800 cursor-pointer"
-            >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); // 모달 열림 방지
-                  addToRoutine(ex);
-                }}
-                className="absolute top-4 right-4 size-11 rounded-xl
-                   bg-white text-black border flex items-center justify-center
-                   hover:bg-gray-100"
-              >
-                <Plus className="size-5" />
-              </button>
-
-              {/* 이미지 */}
-              <div className="w-24 h-24 bg-slate-50 rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
-                {ex.images[0] ? (
-                  <img
-                    src={ex.images[0]}
-                    alt={ex.name}
-                    className="object-contain w-full h-full"
-                  />
-                ) : (
-                  <span className="text-3xl">🏋️</span>
-                )}
-              </div>
-
-              {/* 내용 */}
-              <div className="flex-1">
-                <div className="flex gap-2 flex-wrap mb-2">
-                  {ex.muscles.map((m, idx) => (
-                    <span
-                      key={`${m}-${idx}`}
-                      className="px-2 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase tracking-tighter"
-                    >
-                      {MUSCLE_LABEL[m] ?? m}
-                    </span>
-                  ))}
-                </div>
-
-                <h2 className="text-xl font-bold mb-1 group-hover:text-blue-600 transition-colors">
-                  {ex.name}
-                </h2>
-
-                <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed">
-                  {ex.description ||
-                    "해당 운동에 대한 상세 설명이 준비 중입니다."}
-                </p>
-              </div>
-            </div>
+              ex={ex}
+              onSelect={handleSelect}
+              onAdd={handleAdd}
+            />
           ))}
         </div>
+        {hasMore && (
+          <div
+            ref={observerRef}
+            className="h-20 flex items-center justify-center text-slate-400"
+          >
+            {loadingMore ? "불러오는 중..." : "스크롤하여 더 보기"}
+          </div>
+        )}
 
         {/* ===============================
     Toast Stack
 ================================ */}
-        <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-3 items-end">
+        <div>
           {toasts.map((toast) => (
-            <div
+            <ToastItem
               key={toast.id}
-              className={`
-        flex items-center gap-4
-        bg-white shadow-2xl rounded-2xl
-        px-6 py-4 border
-        min-w-[280px]
-        transition-all duration-300
-        ${toast.isClosing ? "animate-slideOut" : "animate-slideIn"}
-      `}
-            >
-              <div className="flex items-center justify-center size-5 rounded-full bg-black text-white">
-                <Check className="size-3" />
-              </div>
-
-              <p className="text-sm font-semibold whitespace-nowrap">
-                {toast.message}
-              </p>
-
-              <button
-                onClick={() => router.push("/create")}
-                className="ml-4 px-4 py-2 bg-black text-white text-xs rounded-lg hover:opacity-80 transition"
-              >
-                루틴 만들기로 이동
-              </button>
-            </div>
+              message={toast.message}
+              isVisible={!toast.isClosing}
+              onMove={() => router.push("/create")}
+            />
           ))}
         </div>
       </div>

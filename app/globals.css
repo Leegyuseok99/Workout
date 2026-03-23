@@ -31,3 +31,9 @@
 .animate-slideOut {
   animation: slideOut 0.35s ease-in forwards;
 }
+
+.workout-day {
+  background: #86efac !important;
+  border-radius: 10px !important;
+  color: #166534 !important;
+}

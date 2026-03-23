@@ -3,6 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Trash2, GripVertical } from "lucide-react";
+import { useEffect, useState } from "react";
 export default function SortableItem({
   ex,
   removeExercise,
@@ -15,6 +16,45 @@ export default function SortableItem({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  function InputBox({
+    label,
+    value,
+    onChange,
+  }: {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+  }) {
+    const [localValue, setLocalValue] = useState<string>(String(value));
+
+    // 외부 값 변경 시 동기화
+    useEffect(() => {
+      setLocalValue(value === 0 ? "" : String(value));
+    }, [value]);
+
+    return (
+      <div>
+        <label className="block text-sm mb-1">{label}</label>
+
+        <input
+          type="text"
+          value={localValue}
+          onChange={(e) => {
+            const v = e.target.value;
+
+            if (!/^\d*$/.test(v)) return;
+
+            setLocalValue(v);
+          }}
+          onBlur={() => {
+            onChange(localValue === "" ? 0 : Number(localValue));
+          }}
+          className="w-full rounded-lg bg-gray-100 px-3 py-2 outline-none"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -45,17 +85,19 @@ export default function SortableItem({
         <InputBox
           label="Sets"
           value={ex.sets}
-          onChange={(v: number) => updateExercise(ex.id, "sets", v)}
+          onChange={(value) => updateExercise(ex.id, "sets", value)}
         />
+
         <InputBox
           label="Reps"
           value={ex.reps}
-          onChange={(v: number) => updateExercise(ex.id, "reps", v)}
+          onChange={(value) => updateExercise(ex.id, "reps", value)}
         />
+
         <InputBox
           label="Rest"
           value={ex.rest}
-          onChange={(v: number) => updateExercise(ex.id, "rest", v)}
+          onChange={(value) => updateExercise(ex.id, "rest", value)}
         />
       </div>
     </div>
