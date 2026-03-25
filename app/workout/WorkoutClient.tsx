@@ -81,23 +81,37 @@ export default function WorkoutClient({ initialExercises }) {
 
         const data = await res.json();
 
-        const mapped: Exercise[] = data.results.map((item: any) => ({
-          id: item.id,
-          name:
-            item.translations?.find((t: any) => t.language === 2)?.name ??
-            "Unknown",
-          description:
-            item.translations
-              ?.find((t: any) => t.language === 2)
-              ?.description?.replace(/<[^>]*>?/gm, "")
-              .replace(/&nbsp;/g, " ")
-              .trim() ?? "",
-          images: Array.isArray(item.images)
-            ? item.images.map((i: any) => i.image)
-            : [],
-          muscles:
-            item.muscles?.map((m: any) => m.name_en).filter(Boolean) ?? [],
-        }));
+        /* ===============================
+    Data Fetch 내 수정 구간
+================================ */
+        const mapped: Exercise[] = data.results.map((item: any) => {
+          // 1. 이미지 URL에 기본 도메인 결합
+          const imageList =
+            item.images && item.images.length > 0
+              ? item.images.map((i: any) =>
+                  i.image.startsWith("http")
+                    ? i.image
+                    : `https://wger.de${i.image}`,
+                )
+              : [];
+
+          return {
+            id: item.id,
+            name:
+              item.translations?.find((t: any) => t.language === 2)?.name ??
+              item.name ??
+              "Unknown", // 번역이 없을 경우 기본 name 사용
+            description:
+              item.translations
+                ?.find((t: any) => t.language === 2)
+                ?.description?.replace(/<[^>]*>?/gm, "")
+                .replace(/&nbsp;/g, " ")
+                .trim() ?? "",
+            images: imageList,
+            muscles:
+              item.muscles?.map((m: any) => m.name_en).filter(Boolean) ?? [],
+          };
+        });
 
         setExercises((prev) => {
           const newItems = mapped.filter(

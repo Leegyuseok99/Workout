@@ -106,6 +106,15 @@ export default function ActiveRoutinePage() {
     }
   }, [toast.show]);
 
+  // 백그라운드 알림
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
   /* ===============================
    전체 운동 타이머
 ================================ */
@@ -499,6 +508,18 @@ export default function ActiveRoutinePage() {
 
     showToast("세트가 완료 되었습니다!");
   }
+
+  function sendRestNotification() {
+    if (!("Notification" in window)) return;
+
+    if (Notification.permission === "granted") {
+      new Notification("휴식 종료!", {
+        body: "다음 세트를 시작하세요 💪",
+        icon: "/icons/icon-192.png", // 있으면 UX 좋음
+      });
+    }
+  }
+
   /* ===============================
       휴식완료 이벤트
   ================================ */
@@ -516,6 +537,8 @@ export default function ActiveRoutinePage() {
     } catch (e) {
       console.log("Audio play blocked:", e);
     }
+
+    sendRestNotification();
   }
   /* ===============================
      운동 이동

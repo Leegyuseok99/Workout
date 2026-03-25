@@ -254,6 +254,12 @@ export default function CreateRoutinePage() {
                 </div>
               </SortableContext>
             </DndContext>
+            <button
+              onClick={() => router.push("/workout")}
+              className="rounded-xl px-6 py-3 bg-white shadow border"
+            >
+              운동 추가 +
+            </button>
           </section>
         )}
 
