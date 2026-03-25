@@ -53,6 +53,8 @@ export default function ActiveRoutinePage() {
   const restIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const restStartTimeRef = useRef<number | null>(null);
+
   const [elapsedTime, setElapsedTime] = useState(0); // 전체 운동 시간 (초)
   const [isWorkoutRunning, setIsWorkoutRunning] = useState(true);
   const workoutIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -114,6 +116,31 @@ export default function ActiveRoutinePage() {
       Notification.requestPermission();
     }
   }, []);
+
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === "visible") {
+        if (!restStartTimeRef.current) return;
+
+        const now = Date.now();
+        const elapsed = Math.floor((now - restStartTimeRef.current) / 1000);
+
+        if (elapsed >= initialRestTime) {
+          setRestTime(0);
+          notifyRestFinished();
+          setShowRest(false);
+        } else {
+          setRestTime(initialRestTime - elapsed);
+        }
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [initialRestTime]);
 
   /* ===============================
    전체 운동 타이머
@@ -426,7 +453,7 @@ export default function ActiveRoutinePage() {
               setCompletedSets([]);
               setCurrentExerciseIndex(0);
               router.push("/routines");
-              saveWorkoutDate;
+              saveWorkoutDate();
             }}
             className="mt-6 bg-black text-white px-6 py-3 rounded-xl hover:opacity-90"
           >
@@ -496,6 +523,8 @@ export default function ActiveRoutinePage() {
         setCurrentExerciseIndex((prev) => prev + 1);
         setShowRest(true);
         setRestTime(currentExercise.rest);
+
+        restStartTimeRef.current = Date.now();
       }, 1000);
 
       return;
@@ -506,20 +535,29 @@ export default function ActiveRoutinePage() {
     setInitialRestTime(currentExercise.rest);
     setShowRest(true);
 
+    restStartTimeRef.current = Date.now();
+
     showToast("세트가 완료 되었습니다!");
   }
 
   function sendRestNotification() {
+    if (typeof window === "undefined") return;
+
     if (!("Notification" in window)) return;
 
     if (Notification.permission === "granted") {
-      new Notification("휴식 종료!", {
+      const notification = new Notification("휴식 종료!", {
         body: "다음 세트를 시작하세요 💪",
-        icon: "/icons/icon-192.png", // 있으면 UX 좋음
+        icon: "/icons/icon-192.png",
+        tag: "rest-finish",
       });
+
+      //  클릭 시 앱으로 복귀
+      notification.onclick = () => {
+        window.focus();
+      };
     }
   }
-
   /* ===============================
       휴식완료 이벤트
   ================================ */
