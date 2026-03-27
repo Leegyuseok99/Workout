@@ -859,7 +859,7 @@ export default function ActiveRoutinePage() {
 
               <button
                 onClick={() => setIsVibrationEnabled((prev) => !prev)}
-                className={`px-4 py-2 rounded-xl border font-semibold
+                className={`px-4 py-2 rounded-xl border font-semibold md:hidden
                 ${
                   isVibrationEnabled
                     ? "bg-green-100 border-green-400 text-green-700"
