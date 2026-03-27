@@ -280,7 +280,8 @@ export default function WorkoutClient({ initialExercises }) {
           {/* 필터 버튼 */}
           <button
             onClick={() => setIsFilterModalOpen(true)}
-            className="px-8 py-3 bg-gradient-to-br from-blue-400 to-indigo-500 text-white font-bold rounded-2xl shadow-lg"
+            className="px-8 py-3 bg-gradient-to-br from-blue-400 to-indigo-500 text-white font-bold rounded-2xl shadow-lg
+            hover:from-blue-300 hover:to-indigo-400"
           >
             {selectedMuscle
               ? `필터: ${MUSCLE_LABEL[selectedMuscle]}`
@@ -306,7 +307,7 @@ export default function WorkoutClient({ initialExercises }) {
                     onClick={() =>
                       setSelectedMuscle(selectedMuscle === key ? null : key)
                     }
-                    className={`py-3 rounded-xl font-bold border ${
+                    className={`py-3 rounded-xl font-bold border hover:bg-gray-100 ${
                       selectedMuscle === key
                         ? "border-blue-600 bg-blue-50 text-blue-600"
                         : "border-slate-200"

@@ -12,6 +12,10 @@ import {
   CheckCircle2,
   Circle,
   Check,
+  Headphones,
+  HeadphoneOff,
+  Vibrate,
+  VibrateOff,
 } from "lucide-react";
 import Header from "../../../components/Header";
 import ToastItem from "../../../components/ToastItem";
@@ -42,6 +46,18 @@ export default function ActiveRoutinePage() {
   const [isPaused, setIsPaused] = useState(false);
   const [initialRestTime, setInitialRestTime] = useState(0);
   const [isRoutineFinished, setIsRoutineFinished] = useState(false);
+
+  const [isSoundEnabled, setIsSoundEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem("soundEnabled");
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  const [isVibrationEnabled, setIsVibrationEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem("vibrationEnabled");
+    return saved !== null ? JSON.parse(saved) : true;
+  });
 
   const [toast, setToast] = useState<{
     show: boolean;
@@ -95,6 +111,25 @@ export default function ActiveRoutinePage() {
       }
     };
   }, [showRest, isPaused, restTime]);
+
+  useEffect(() => {
+    localStorage.setItem("soundEnabled", JSON.stringify(isSoundEnabled));
+  }, [isSoundEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "vibrationEnabled",
+      JSON.stringify(isVibrationEnabled),
+    );
+  }, [isVibrationEnabled]);
+
+  useEffect(() => {
+    const sound = localStorage.getItem("soundEnabled");
+    const vibration = localStorage.getItem("vibrationEnabled");
+
+    if (sound !== null) setIsSoundEnabled(JSON.parse(sound));
+    if (vibration !== null) setIsVibrationEnabled(JSON.parse(vibration));
+  }, []);
 
   useEffect(() => {
     if (toast.show) {
@@ -562,18 +597,24 @@ export default function ActiveRoutinePage() {
       휴식완료 이벤트
   ================================ */
   function notifyRestFinished() {
-    // 모바일 진동 (지원 브라우저만 동작)
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      navigator.vibrate([300, 100, 300, 100, 300]); // 진동 → 멈춤 → 진동
+    // 소리
+    if (isSoundEnabled) {
+      try {
+        const audio = new Audio("/rest-finish.wav");
+        audio.volume = 1;
+        audio.play();
+      } catch (e) {
+        console.log("Audio play blocked:", e);
+      }
     }
 
-    //  소리 알림
-    try {
-      const audio = new Audio("/rest-finish.wav");
-      audio.volume = 1;
-      audio.play();
-    } catch (e) {
-      console.log("Audio play blocked:", e);
+    // 진동
+    if (
+      isVibrationEnabled &&
+      typeof navigator !== "undefined" &&
+      "vibrate" in navigator
+    ) {
+      navigator.vibrate([300, 100, 300, 100, 300]);
     }
 
     sendRestNotification();
@@ -802,6 +843,31 @@ export default function ActiveRoutinePage() {
                 className="px-4 py-2 border rounded-xl hover:bg-gray-100"
               >
                 <Plus></Plus>
+              </button>
+              <button
+                onClick={() => setIsSoundEnabled((prev) => !prev)}
+                className={`px-4 py-2 rounded-xl border font-semibold
+                ${
+                  isSoundEnabled
+                    ? "bg-blue-100 border-blue-400 text-blue-700"
+                    : "bg-gray-100 text-gray-500"
+                }
+              `}
+              >
+                {isSoundEnabled ? <Headphones /> : <HeadphoneOff />}
+              </button>
+
+              <button
+                onClick={() => setIsVibrationEnabled((prev) => !prev)}
+                className={`px-4 py-2 rounded-xl border font-semibold
+                ${
+                  isVibrationEnabled
+                    ? "bg-green-100 border-green-400 text-green-700"
+                    : "bg-gray-100 text-gray-500"
+                }
+              `}
+              >
+                {isVibrationEnabled ? <Vibrate /> : <VibrateOff />}
               </button>
             </div>
 

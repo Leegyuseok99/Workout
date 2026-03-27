@@ -256,9 +256,15 @@ export default function CreateRoutinePage() {
             </DndContext>
             <button
               onClick={() => router.push("/workout")}
-              className="rounded-xl px-6 py-3 bg-white shadow border"
+              className="group w-full flex items-center justify-center gap-2 py-4 rounded-2xl 
+             bg-white/70 backdrop-blur-md border border-gray-200 shadow-sm
+             hover:bg-gradient-to-r from-purple-400 via-pink-400 to-pink-500 font-semibold tracking-wide
+             transition-all duration-300
+             hover:text-white
+             "
             >
-              운동 추가 +
+              <Plus className="size-5 transition-transform group-hover:scale-110" />
+              <span className="font-semibold tracking-wide">운동 추가</span>
             </button>
           </section>
         )}
