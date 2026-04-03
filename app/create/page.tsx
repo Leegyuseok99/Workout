@@ -151,6 +151,22 @@ export default function CreateRoutinePage() {
   function saveRoutine() {
     if (!routineName.trim() || exercises.length === 0) return;
 
+    const hasInvalidValue = exercises.some(
+      (ex) =>
+        !ex.sets ||
+        ex.sets <= 0 ||
+        !ex.reps ||
+        ex.reps <= 0 ||
+        ex.rest === undefined ||
+        ex.rest === null ||
+        (ex.rest === 0 && !Object.is(ex.rest, 0)),
+    );
+
+    if (hasInvalidValue) {
+      showToast("모든 운동의 세트, 횟수, 휴식 시간을 올바르게 입력해주세요.");
+      return;
+    }
+
     const stored = localStorage.getItem("savedRoutines");
     const parsed: SavedRoutine[] = stored ? JSON.parse(stored) : [];
 
