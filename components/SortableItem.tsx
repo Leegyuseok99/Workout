@@ -68,7 +68,7 @@ export default function SortableItem({
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab text-gray-400"
+            className="touch-none cursor-grab text-gray-400"
           >
             <GripVertical className="size-5" />
           </div>

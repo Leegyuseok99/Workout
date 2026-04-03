@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Header from "./Header";
 import { CalendarDays, CheckCircle, Dumbbell } from "lucide-react";
 import { DayPicker } from "react-day-picker";
@@ -13,42 +13,41 @@ export default function WorkoutCalendar() {
   const [selected, setSelected] = useState<Date | undefined>(new Date());
   const [history, setHistory] = useState<Record<string, any[]>>({});
 
+  // 현재 달력에 보여지는 월 상태 추가
+  const [currentViewMonth, setCurrentViewMonth] = useState<Date>(new Date());
+
   useEffect(() => {
     const savedHistory = localStorage.getItem("workout-history");
-
     if (savedHistory) {
       setHistory(JSON.parse(savedHistory));
     }
   }, []);
+  // 모달 오픈 시 스크롤 제어
   useEffect(() => {
-    if (modalOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "auto";
-    }
-
+    document.body.style.overflow = modalOpen ? "hidden" : "auto";
     return () => {
       document.body.style.overflow = "auto";
     };
   }, [modalOpen]);
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString("sv-SE");
-  };
-  const options: Intl.DateTimeFormatOptions = {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  };
+  // 현재 보고 있는 월에 해당하는 운동 데이터만 필터링
+  const monthlyData = useMemo(() => {
+    const year = currentViewMonth.getFullYear();
+    const month = currentViewMonth.getMonth();
 
-  const workoutDates = Object.keys(history);
+    return Object.entries(history).filter(([dateStr]) => {
+      const d = new Date(dateStr);
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
+  }, [history, currentViewMonth]);
 
-  const totalWorkouts = Object.values(history).reduce(
-    (sum: number, routines: any[]) => sum + routines.length,
+  // 필터링된 데이터를 기반으로 통계 계산
+  const monthlyWorkoutsCount = monthlyData.reduce(
+    (sum, [_, routines]) => sum + routines.length,
     0,
   );
 
-  const totalSets = Object.values(history).reduce((sum, routines) => {
+  const monthlySetsCount = monthlyData.reduce((sum, [_, routines]) => {
     return (
       sum +
       routines.reduce((rSum, routine) => {
@@ -63,12 +62,16 @@ export default function WorkoutCalendar() {
     );
   }, 0);
 
-  const currentMonth = new Date().getMonth();
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("sv-SE");
+  };
+  const options: Intl.DateTimeFormatOptions = {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  };
 
-  const completedDays = workoutDates.map((d) => new Date(d));
-  const monthlyWorkouts = workoutDates.filter(
-    (d) => new Date(d).getMonth() === currentMonth,
-  ).length;
+  const completedDays = Object.keys(history).map((d) => new Date(d));
 
   const recentHistory = Object.entries(history)
     .flatMap(([date, items]) =>
@@ -79,11 +82,8 @@ export default function WorkoutCalendar() {
     )
     .sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1))
     .slice(0, 5);
+
   const selectedWorkouts = selectedDate ? history[selectedDate] || [] : [];
-  // const getRoutineExercises = (routineName: string) => {
-  //   const routine = savedRoutines.find((r) => r.name === routineName);
-  //   return routine?.exercises || [];
-  // };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -96,25 +96,25 @@ export default function WorkoutCalendar() {
 
         <div className="grid grid-cols-3 gap-6">
           <StatCard
-            title="총 운동 횟수"
-            icon={<Dumbbell className="size-6 text-white" />}
-            value={totalWorkouts}
+            title={`${currentViewMonth.getMonth() + 1}월 총 운동`}
+            icon={<CalendarDays className="size-6 text-white" />}
+            value={monthlyWorkoutsCount}
             subtitle="회"
             color="from-blue-500 to-indigo-500"
           />
 
           <StatCard
-            title="총 세트 수"
+            title={`${currentViewMonth.getMonth() + 1}월 총 세트`}
             icon={<CheckCircle className="size-6 text-white" />}
-            value={totalSets}
+            value={monthlySetsCount}
             subtitle="세트"
             color="from-green-500 to-emerald-500"
           />
 
           <StatCard
-            title="이번 달 운동"
-            icon={<CalendarDays className="size-6 text-white" />}
-            value={monthlyWorkouts}
+            title="누적 운동 횟수" // 하나 정도는 전체 누적을 보여주는 것이 지표상 좋습니다.
+            icon={<Dumbbell className="size-6 text-white" />}
+            value={Object.values(history).flat().length}
             subtitle="회"
             color="from-purple-500 to-pink-500"
           />
@@ -139,6 +139,8 @@ export default function WorkoutCalendar() {
               <DayPicker
                 mode="single"
                 locale={ko}
+                month={currentViewMonth}
+                onMonthChange={setCurrentViewMonth}
                 selected={selected}
                 onSelect={(day) => {
                   if (!day) return;
@@ -175,7 +177,7 @@ export default function WorkoutCalendar() {
 
             <div className="flex items-center gap-2">
               <CheckCircle className="text-green-500" size={16} />총{" "}
-              {totalWorkouts}회 운동 완료
+              {monthlyWorkoutsCount}회 운동 완료
             </div>
           </div>
         </div>
@@ -204,7 +206,15 @@ export default function WorkoutCalendar() {
                     <div>
                       <p className="font-semibold">{item.routineName}</p>
                       <p className="text-sm text-gray-500">
-                        {date.toLocaleString("ko-KR")}
+                        {date.toLocaleString("ko-KR", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        })}{" "}
+                        완료
                       </p>
                     </div>
                   </div>
@@ -239,7 +249,7 @@ export default function WorkoutCalendar() {
                   <div className="pr-2">
                     <CheckCircle className="text-green-500" size={20} />{" "}
                   </div>
-                  {selectedDate} 운동 기록
+                  운동 기록
                 </h2>
 
                 <button

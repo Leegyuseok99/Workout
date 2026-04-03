@@ -46,6 +46,8 @@ export default function CreateRoutinePage() {
     null,
   );
 
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
   const [toast, setToast] = useState<{
     show: boolean;
     message: string;
@@ -136,10 +138,11 @@ export default function CreateRoutinePage() {
   /* ===============================
      초기화
   ================================ */
-  function resetRoutine() {
+  function confirmReset() {
     setExercises([]);
     setRoutineName("");
     localStorage.removeItem("routineExercises");
+    setIsResetConfirmOpen(false);
   }
 
   /* ===============================
@@ -284,8 +287,12 @@ export default function CreateRoutinePage() {
           </button>
 
           <button
-            onClick={resetRoutine}
-            className="px-6 rounded-xl bg-white border text-gray-600"
+            onClick={() => setIsResetConfirmOpen(true)}
+            disabled={isEmpty}
+            className="px-6 rounded-xl bg-white border text-gray-600
+             disabled:border-gray-200 disabled:bg-gray-50
+             disabled:text-gray-400 disabled:cursor-not-allowed
+             hover:bg-gray-100 transition disabled:hover:bg-gray-50"
           >
             초기화
           </button>
@@ -329,6 +336,44 @@ export default function CreateRoutinePage() {
                 className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
               >
                 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ===============================
+          초기화 확인 모달
+      ================================ */}
+      {isResetConfirmOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          {/* 배경 */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setIsResetConfirmOpen(false)}
+          />
+
+          {/* 모달 */}
+          <div className="relative bg-white w-[420px] rounded-2xl shadow-2xl p-6">
+            <h3 className="text-lg font-bold mb-3">루틴 초기화</h3>
+
+            <p className="text-sm text-gray-600 mb-6">
+              현재 작성 중인 루틴을 모두 초기화하시겠습니까?
+              <br />이 작업은 되돌릴 수 없습니다.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsResetConfirmOpen(false)}
+                className="px-4 py-2 rounded-lg border bg-gray-100 hover:bg-gray-200 transition"
+              >
+                취소
+              </button>
+
+              <button
+                onClick={confirmReset}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
+              >
+                초기화
               </button>
             </div>
           </div>

@@ -363,7 +363,7 @@ export default function WorkoutClient({ initialExercises }) {
                   </p>
                 </section>
 
-                {/* 🆕 운동 루틴 영상 */}
+                {/* 운동 루틴 영상 */}
                 <section>
                   <h3 className="text-2xl font-black mb-4">Video</h3>
 

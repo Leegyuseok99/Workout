@@ -1,6 +1,6 @@
 "use client";
 
-import { Dumbbell, Trash2, Play } from "lucide-react";
+import { Dumbbell, Trash2, Play, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Header from "../../components/Header";
@@ -100,6 +100,14 @@ export default function RoutinesPage() {
             <p className="text-sm text-gray-500">
               운동 루틴을 만들어 저장해보세요.
             </p>
+            <div className="fixed bottom-10 right-10">
+              <button
+                onClick={() => router.push("/create")}
+                className="p-3 rounded-3xl bg-black text-white border hover:opacity-50 transition"
+              >
+                <Plus className="size-7" />
+              </button>
+            </div>
           </div>
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
@@ -131,7 +139,7 @@ export default function RoutinesPage() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => startRoutine(routine)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-black text-white py-2 rounded-xl font-medium hover:opacity-90 transition"
+                    className="flex-1 flex items-center justify-center gap-2 bg-black text-white py-2 rounded-xl font-medium hover:opacity-80 transition"
                   >
                     <Play className="size-4" />
                     시작하기
@@ -146,6 +154,23 @@ export default function RoutinesPage() {
                 </div>
               </div>
             ))}
+            <div className="group bg-white/60 backdrop-blur-md rounded-3xl p-6 shadow-sm border-2 border-dashed border-gray-200 hover:shadow-lg transition-all duration-300 cursor-pointer">
+              <button
+                onClick={() => router.push("/create")}
+                className="w-full h-full flex flex-col items-center justify-center gap-3"
+              >
+                <div className="size-14 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white shadow-md group-hover:scale-110 transition">
+                  <Plus className="size-6" />
+                </div>
+
+                <div className="text-center">
+                  <p className="font-semibold text-gray-800">운동 추가</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    새로운 루틴을 만들어보세요
+                  </p>
+                </div>
+              </button>
+            </div>
           </div>
         )}
       </main>
