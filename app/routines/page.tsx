@@ -110,11 +110,11 @@ export default function RoutinesPage() {
             </div>
           </div>
         ) : (
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
             {routines.map((routine) => (
               <div
                 key={routine.id}
-                className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100"
+                className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 h-full"
               >
                 <h2 className="text-lg font-bold mb-1">{routine.name}</h2>
 
@@ -154,7 +154,7 @@ export default function RoutinesPage() {
                 </div>
               </div>
             ))}
-            <div className="group bg-white/60 backdrop-blur-md rounded-3xl p-6 shadow-sm border-2 border-dashed border-gray-200 hover:shadow-lg transition-all duration-300 cursor-pointer">
+            <div className="group bg-white/60 backdrop-blur-md rounded-3xl p-6 shadow-sm border-2 border-dashed border-gray-200 hover:shadow-lg transition-all duration-300 cursor-pointer h-full min-h-[250px]">
               <button
                 onClick={() => router.push("/create")}
                 className="w-full h-full flex flex-col items-center justify-center gap-3"
