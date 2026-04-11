@@ -5,7 +5,8 @@ import { Plus, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Header from "../../components/Header";
 import ExerciseCard from "../../components/ExerciseCard";
-import ToastItem from "../../components/ToastItem";
+// import ToastItem from "../../components/ToastItem";
+import dynamic from "next/dynamic";
 
 /* ===============================
    Types
@@ -44,6 +45,9 @@ const MUSCLE_LABEL: Record<string, string> = {
 };
 
 export default function WorkoutClient({ initialExercises }) {
+  const ToastItem = dynamic(() => import("@/components/ToastItem"), {
+    ssr: false,
+  });
   const [exercises, setExercises] = useState(initialExercises);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);

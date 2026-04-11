@@ -4,6 +4,7 @@ import { Dumbbell, Trash2, Play, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Header from "../../components/Header";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface RoutineExercise {
   id: number;
@@ -23,6 +24,7 @@ export default function RoutinesPage() {
   const router = useRouter();
   const [routines, setRoutines] = useState<SavedRoutine[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<SavedRoutine | null>(null);
+  const [open, setOpen] = useState(false);
 
   /* ===============================
      localStorage 불러오기
@@ -37,7 +39,7 @@ export default function RoutinesPage() {
   /* ===============================
      실제 삭제 실행
   ================================ */
-  function confirmDelete() {
+  const handleDelete = () => {
     if (!deleteTarget) return;
 
     const updated = routines.filter((r) => r.id !== deleteTarget.id);
@@ -47,14 +49,14 @@ export default function RoutinesPage() {
     const active = localStorage.getItem("activeWorkout");
     if (active) {
       const parsed = JSON.parse(active);
-
       if (parsed.routine.id === deleteTarget.id) {
         localStorage.removeItem("activeWorkout");
       }
     }
 
     setDeleteTarget(null);
-  }
+    setOpen(false); // 추가
+  };
 
   /* ===============================
      시작하기
@@ -146,7 +148,10 @@ export default function RoutinesPage() {
                   </button>
 
                   <button
-                    onClick={() => setDeleteTarget(routine)}
+                    onClick={() => {
+                      setDeleteTarget(routine);
+                      setOpen(true);
+                    }}
                     className="p-3 rounded-xl border text-red-500 hover:bg-red-50 transition"
                   >
                     <Trash2 className="size-5" />
@@ -178,41 +183,17 @@ export default function RoutinesPage() {
       {/* ===============================
           삭제 확인 모달
       ================================ */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
-          {/* 배경 */}
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setDeleteTarget(null)}
-          />
-
-          {/* 모달 */}
-          <div className="relative bg-white w-[420px] rounded-2xl shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">루틴 삭제</h3>
-
-            <p className="text-sm text-gray-600 mb-6">
-              "{deleteTarget.name}" 루틴을 삭제하시겠습니까?
-              <br />이 작업은 되돌릴 수 없습니다.
-            </p>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 rounded-lg border bg-gray-100 hover:bg-gray-200 transition"
-              >
-                취소
-              </button>
-
-              <button
-                onClick={confirmDelete}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
-              >
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={open}
+        onOpenChange={setOpen}
+        onConfirm={handleDelete}
+        title="루틴 삭제"
+        description={
+          deleteTarget
+            ? `'${deleteTarget.name}' 루틴을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+            : ""
+        }
+      />
     </div>
   );
 }

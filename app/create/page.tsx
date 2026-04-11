@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef, useCallback } from "react";
 import Header from "../../components/Header";
 import ToastItem from "../../components/ToastItem";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface Exercise {
   id: number;
@@ -46,8 +47,6 @@ export default function CreateRoutinePage() {
     null,
   );
 
-  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
-
   const [toast, setToast] = useState<{
     show: boolean;
     message: string;
@@ -57,6 +56,10 @@ export default function CreateRoutinePage() {
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor));
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  const [isResetOpen, setIsResetOpen] = useState(false);
 
   /* ===============================
      localStorage 불러오기
@@ -94,12 +97,24 @@ export default function CreateRoutinePage() {
   ================================ */
   const removeExercise = useCallback(
     (id: number) => {
-      setDeleteTarget((prev) => {
-        return exercises.find((ex) => ex.id === id) ?? null;
-      });
+      const target = exercises.find((ex) => ex.id === id) ?? null;
+      setDeleteTarget(target);
+      setIsDeleteOpen(true);
     },
     [exercises],
   );
+
+  function confirmDelete() {
+    if (!deleteTarget) return;
+
+    const updated = exercises.filter((ex) => ex.id !== deleteTarget.id);
+
+    setExercises(updated);
+    localStorage.setItem("routineExercises", JSON.stringify(updated));
+
+    setDeleteTarget(null);
+    setIsDeleteOpen(false);
+  }
 
   /* ===============================
      위치 조정
@@ -116,16 +131,6 @@ export default function CreateRoutinePage() {
       return arrayMove(items, oldIndex, newIndex);
     });
   }, []);
-  function confirmDelete() {
-    if (!deleteTarget) return;
-
-    const updated = exercises.filter((ex) => ex.id !== deleteTarget.id);
-
-    setExercises(updated);
-    localStorage.setItem("routineExercises", JSON.stringify(updated));
-
-    setDeleteTarget(null);
-  }
 
   useEffect(() => {
     return () => {
@@ -142,7 +147,8 @@ export default function CreateRoutinePage() {
     setExercises([]);
     setRoutineName("");
     localStorage.removeItem("routineExercises");
-    setIsResetConfirmOpen(false);
+    // setIsResetConfirmOpen(false);
+    setIsResetOpen(false);
   }
 
   /* ===============================
@@ -303,7 +309,7 @@ export default function CreateRoutinePage() {
           </button>
 
           <button
-            onClick={() => setIsResetConfirmOpen(true)}
+            onClick={() => setIsResetOpen(true)}
             disabled={isEmpty}
             className="px-6 rounded-xl bg-white border text-gray-600
              disabled:border-gray-200 disabled:bg-gray-50
@@ -322,79 +328,33 @@ export default function CreateRoutinePage() {
       {/* ===============================
           삭제 확인 모달
       ================================ */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
-          {/* 배경 */}
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setDeleteTarget(null)}
-          />
-
-          {/* 모달 */}
-          <div className="relative bg-white w-[420px] rounded-2xl shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">운동 삭제</h3>
-
-            <p className="text-sm text-gray-600 mb-6">
-              "{deleteTarget.name}" 운동을 루틴에서 삭제하시겠습니까?
-              <br />이 작업은 되돌릴 수 없습니다.
-            </p>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 rounded-lg border bg-gray-100 hover:bg-gray-200 transition"
-              >
-                취소
-              </button>
-
-              <button
-                onClick={confirmDelete}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
-              >
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={isDeleteOpen}
+        onOpenChange={(open) => {
+          setIsDeleteOpen(open);
+          if (!open) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDelete}
+        title="운동 삭제"
+        description={
+          deleteTarget
+            ? `"${deleteTarget.name}" 운동을 루틴에서 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+            : ""
+        }
+      />
       {/* ===============================
           초기화 확인 모달
       ================================ */}
-      {isResetConfirmOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
-          {/* 배경 */}
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setIsResetConfirmOpen(false)}
-          />
-
-          {/* 모달 */}
-          <div className="relative bg-white w-[420px] rounded-2xl shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">루틴 초기화</h3>
-
-            <p className="text-sm text-gray-600 mb-6">
-              현재 작성 중인 루틴을 모두 초기화하시겠습니까?
-              <br />이 작업은 되돌릴 수 없습니다.
-            </p>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setIsResetConfirmOpen(false)}
-                className="px-4 py-2 rounded-lg border bg-gray-100 hover:bg-gray-200 transition"
-              >
-                취소
-              </button>
-
-              <button
-                onClick={confirmReset}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
-              >
-                초기화
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={isResetOpen}
+        onOpenChange={setIsResetOpen}
+        onConfirm={confirmReset}
+        title="루틴 초기화"
+        description={
+          "현재 작성 중인 루틴을 모두 초기화하시겠습니까? \n이 작업은 되돌릴 수 없습니다."
+        }
+        confirmText="초기화"
+      />
     </div>
   );
 }

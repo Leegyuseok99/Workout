@@ -446,19 +446,44 @@ export default function ActiveRoutinePage() {
 
   const removeSet = () => {
     if (!routine || currentExercise!.sets <= 1) return;
+
     const updatedRoutine = {
       ...routine,
       exercises: routine.exercises.map((ex, idx) => {
         if (idx !== currentExerciseIndex) return ex;
-        return { ...ex, sets: ex.sets - 1, reps: ex.reps.slice(0, -1) };
+        return {
+          ...ex,
+          sets: ex.sets - 1,
+          reps: ex.reps.slice(0, -1),
+        };
       }),
     };
+
     const newCompleted = [...completedSets];
     newCompleted[currentExerciseIndex] = Math.min(
       newCompleted[currentExerciseIndex],
       updatedRoutine.exercises[currentExerciseIndex].sets,
     );
-    dispatch({ type: "REMOVE_SET", newRoutine: updatedRoutine, newCompleted });
+
+    // ✅ 1. 먼저 상태 반영
+    dispatch({
+      type: "REMOVE_SET",
+      newRoutine: updatedRoutine,
+      newCompleted,
+    });
+
+    // ✅ 2. 그 다음 완료 체크
+    const isAllFinished = updatedRoutine.exercises.every(
+      (ex, i) => (newCompleted[i] || 0) >= ex.sets,
+    );
+
+    if (isAllFinished) {
+      dispatch({ type: "FINISH_WORKOUT" });
+      saveWorkoutHistory(updatedRoutine);
+      showToast("🎉 루틴이 모두 완료되었습니다!");
+      return;
+    }
+
     showToast("세트가 삭제되었습니다");
   };
 

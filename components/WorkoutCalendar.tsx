@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Header from "./Header";
-import { CalendarDays, CheckCircle, Dumbbell } from "lucide-react";
+import { CalendarDays, CheckCircle, Dumbbell, X } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
+import * as Dialog from "@radix-ui/react-dialog"; // 모달 제어 라이브러리
 import { ko } from "date-fns/locale";
 
 export default function WorkoutCalendar() {
@@ -22,13 +23,6 @@ export default function WorkoutCalendar() {
       setHistory(JSON.parse(savedHistory));
     }
   }, []);
-  // 모달 오픈 시 스크롤 제어
-  useEffect(() => {
-    document.body.style.overflow = modalOpen ? "hidden" : "auto";
-    return () => {
-      document.body.style.overflow = "auto";
-    };
-  }, [modalOpen]);
 
   // 현재 보고 있는 월에 해당하는 운동 데이터만 필터링
   const monthlyData = useMemo(() => {
@@ -234,98 +228,97 @@ export default function WorkoutCalendar() {
           </div>
         </div>
         {modalOpen && selectedDate && (
-          <div
-            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-            onClick={() => setModalOpen(false)}
-          >
-            <div
-              className="bg-white rounded-2xl w-[500px] max-h-[80vh] overflow-y-auto p-6 shadow-xl"
-              onClick={(e) => e.stopPropagation}
-            >
-              {/* 헤더 */}
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="flex text-lg font-bold">
-                  {" "}
-                  <div className="pr-2">
-                    <CheckCircle className="text-green-500" size={20} />{" "}
-                  </div>
-                  운동 기록
-                </h2>
+          <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
+            <Dialog.Portal>
+              {/* 배경 (Overlay) - 자동으로 스크롤 잠금 및 애니메이션 지원 */}
+              <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
 
-                <button
-                  onClick={() => setModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-700"
-                >
-                  ✕
-                </button>
-              </div>
+              {/* 콘텐츠 (Content) - 중앙 정렬 및 포커스 트래핑 자동 적용 */}
+              <Dialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-[500px] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-white p-6 shadow-xl duration-200 rounded-2xl max-h-[80vh] overflow-y-auto outline-none">
+                <div className="flex justify-between items-center mb-4">
+                  <Dialog.Title className="flex text-lg font-bold items-center gap-2">
+                    <CheckCircle className="text-green-500" size={20} />
+                    운동 기록
+                  </Dialog.Title>
 
-              {/* 루틴 목록 */}
-              <div className="space-y-4">
-                {selectedWorkouts.map((routine, index) => {
-                  const exercises = routine.exercises || [];
+                  <Dialog.Close asChild>
+                    <button className="text-gray-400 hover:text-gray-700 outline-none">
+                      <X size={20} />
+                    </button>
+                  </Dialog.Close>
+                </div>
 
-                  return (
-                    <div
-                      key={index}
-                      className="border border-green-200 rounded-xl p-4 bg-green-50"
-                    >
-                      <div className="flex justify-between items-center">
-                        <p className="font-semibold">{routine.routineName}</p>
+                <Dialog.Description className="sr-only">
+                  선택한 날짜의 상세 운동 루틴 목록입니다.
+                </Dialog.Description>
 
-                        <span className="text-sm bg-green-500 text-white px-2 py-1 rounded">
-                          완료
-                        </span>
-                      </div>
+                {/* 루틴 목록 */}
+                <div className="space-y-4">
+                  {selectedWorkouts.map((routine, index) => {
+                    const exercises = routine.exercises || [];
 
-                      <p className="text-xs text-gray-500 mb-3">
-                        {new Date(routine.completedAt).toLocaleTimeString(
-                          "ko-KR",
-                          options,
-                        )}
-                        에 완료
-                      </p>
+                    return (
+                      <div
+                        key={index}
+                        className="border border-green-200 rounded-xl p-4 bg-green-50"
+                      >
+                        <div className="flex justify-between items-center">
+                          <p className="font-semibold">{routine.routineName}</p>
 
-                      <p className="text-xs text-gray-500 mb-2">운동 목록</p>
+                          <span className="text-sm bg-green-500 text-white px-2 py-1 rounded">
+                            완료
+                          </span>
+                        </div>
 
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {exercises.map((ex: any, i: number) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-2 px-3 py-2 bg-white border rounded-lg text-sm w-full"
-                          >
-                            <CheckCircle
-                              size={14}
-                              className="text-green-500 overflow-hidden text-ellipsis"
-                            />
-
-                            <p className="truncate flex-1">{ex.name}</p>
-
-                            <span className="text-gray-400 text-xs">
-                              {ex.sets} / {ex.sets} 세트
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="border my-6"></div>
-
-                      <div className="flex justify-between">
-                        <p className="text-xs text-gray-500">총 완료 세트</p>
-                        <p className="font-bold text-green-500">
-                          {exercises.reduce(
-                            (sum: number, ex: any) => sum + ex.sets,
-                            0,
-                          )}{" "}
-                          세트
+                        <p className="text-xs text-gray-500 mb-3">
+                          {new Date(routine.completedAt).toLocaleTimeString(
+                            "ko-KR",
+                            options,
+                          )}
+                          에 완료
                         </p>
+
+                        <p className="text-xs text-gray-500 mb-2">운동 목록</p>
+
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {exercises.map((ex: any, i: number) => (
+                            <div
+                              key={i}
+                              className="flex items-center gap-2 px-3 py-2 bg-white border rounded-lg text-sm w-full"
+                            >
+                              <CheckCircle
+                                size={14}
+                                className="text-green-500 overflow-hidden text-ellipsis"
+                              />
+
+                              <p className="truncate flex-1">{ex.name}</p>
+
+                              <span className="text-gray-400 text-xs">
+                                {ex.sets} / {ex.sets} 세트
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="border my-6"></div>
+
+                        <div className="flex justify-between">
+                          <p className="text-xs text-gray-500">총 완료 세트</p>
+                          <p className="font-bold text-green-500">
+                            {exercises.reduce(
+                              (sum: number, ex: any) => sum + ex.sets,
+                              0,
+                            )}{" "}
+                            세트
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+                    );
+                  })}
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         )}
       </div>
     </div>
