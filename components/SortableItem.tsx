@@ -24,7 +24,7 @@ export default function SortableItem({
   }: {
     label: string;
     value: number;
-    onChange: (value: number) => void;
+    onChange: (value: number | undefined) => void;
   }) {
     const [localValue, setLocalValue] = useState<string>(String(value));
 
@@ -48,7 +48,7 @@ export default function SortableItem({
             setLocalValue(v);
           }}
           onBlur={() => {
-            onChange(localValue === "" ? 0 : Number(localValue));
+            onChange(localValue === "" ? undefined : Number(localValue));
           }}
           className="w-full rounded-lg bg-gray-100 px-3 py-2 outline-none"
         />
@@ -81,7 +81,7 @@ export default function SortableItem({
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-5">
         <InputBox
           label="Sets"
           value={ex.sets}
@@ -93,7 +93,11 @@ export default function SortableItem({
           value={ex.reps}
           onChange={(value) => updateExercise(ex.id, "reps", value)}
         />
-
+        <InputBox
+          label="weight"
+          value={ex.weight}
+          onChange={(value) => updateExercise(ex.id, "weight", value)}
+        />
         <InputBox
           label="Rest"
           value={ex.rest}
@@ -106,24 +110,24 @@ export default function SortableItem({
 /* ===============================
    Input Component
 ================================ */
-function InputBox({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div>
-      <label className="block text-sm mb-1">{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded-lg bg-gray-100 px-3 py-2 outline-none"
-      />
-    </div>
-  );
-}
+// function InputBox({
+//   label,
+//   value,
+//   onChange,
+// }: {
+//   label: string;
+//   value: number;
+//   onChange: (v: number) => void;
+// }) {
+//   return (
+//     <div>
+//       <label className="block text-sm mb-1">{label}</label>
+//       <input
+//         type="number"
+//         value={value}
+//         onChange={(e) => onChange(Number(e.target.value))}
+//         className="w-full rounded-lg bg-gray-100 px-3 py-2 outline-none"
+//       />
+//     </div>
+//   );
+// }

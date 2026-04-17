@@ -6,6 +6,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
+  onCancel?: () => void;
   title?: string;
   description?: string;
   confirmText?: string;
@@ -15,9 +16,10 @@ export default function ConfirmModal({
   open,
   onOpenChange,
   onConfirm,
+  onCancel,
   title = "확인",
   description = "정말 진행하시겠습니까?",
-  confirmText = "삭제",
+  confirmText = "확인",
 }: Props) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -37,7 +39,13 @@ export default function ConfirmModal({
 
           <div className="flex justify-end gap-3">
             <Dialog.Close asChild>
-              <button className="px-4 py-2 border rounded-lg bg-gray-100 hover:bg-gray-200 transition">
+              <button
+                onClick={() => {
+                  onCancel?.();
+                  onOpenChange(false);
+                }}
+                className="px-4 py-2 border rounded-lg bg-gray-100 hover:bg-gray-200 transition"
+              >
                 취소
               </button>
             </Dialog.Close>

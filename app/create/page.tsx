@@ -30,6 +30,7 @@ interface RoutineExercise extends Exercise {
   sets: number;
   reps: number;
   rest: number;
+  weight: number;
 }
 
 interface SavedRoutine {
@@ -74,6 +75,7 @@ export default function CreateRoutinePage() {
         sets: 3,
         reps: 10,
         rest: 60,
+        weight: 0,
       }));
 
       setExercises(withDefaults);
@@ -84,7 +86,11 @@ export default function CreateRoutinePage() {
      값 수정
   ================================ */
   const updateExercise = useCallback(
-    (id: number, field: "sets" | "reps" | "rest", value: number) => {
+    (
+      id: number,
+      field: "sets" | "reps" | "rest" | "weight",
+      value: number | undefined,
+    ) => {
       setExercises((prev) =>
         prev.map((ex) => (ex.id === id ? { ...ex, [field]: value } : ex)),
       );

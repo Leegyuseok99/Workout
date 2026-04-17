@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -15,19 +22,31 @@ import {
   HeadphoneOff,
   Vibrate,
   VibrateOff,
+  SquarePen,
 } from "lucide-react";
 import Header from "../../../components/Header";
 import ToastItem from "../../../components/ToastItem";
+import ConfirmModal from "@/components/ConfirmModal";
 
 /* ===============================
     Types
 ================================ */
+interface RoutineExerciseBase {
+  id: number;
+  name: string;
+  sets: number;
+  reps: number;
+  rest: number;
+  weight: number;
+}
+
 interface RoutineExercise {
   id: number;
   name: string;
   sets: number;
   reps: number[];
   rest: number;
+  weight: number[];
 }
 
 interface SavedRoutine {
@@ -66,6 +85,7 @@ type Action =
   | { type: "ADD_SET"; newRoutine: SavedRoutine; newCompleted: number[] }
   | { type: "REMOVE_SET"; newRoutine: SavedRoutine; newCompleted: number[] }
   | { type: "UPDATE_REPS"; newRoutine: SavedRoutine }
+  | { type: "UPDATE_WEIGHT"; newRoutine: SavedRoutine }
   | { type: "CHANGE_EXERCISE"; index: number }
   | { type: "TOGGLE_SOUND" }
   | { type: "TOGGLE_VIBRATION" }
@@ -137,6 +157,8 @@ function reducer(state: State, action: Action): State {
       };
     case "UPDATE_REPS":
       return { ...state, routine: action.newRoutine };
+    case "UPDATE_WEIGHT":
+      return { ...state, routine: action.newRoutine };
     case "CHANGE_EXERCISE":
       return {
         ...state,
@@ -194,6 +216,12 @@ export default function ActiveRoutinePage() {
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const restStartTimeRef = useRef<number | null>(null);
 
+  // 루틴 수정
+  const [editingReps, setEditingReps] = useState(false);
+  const [tempReps, setTempReps] = useState("");
+  const [editingWeight, setEditingWeight] = useState(false);
+  const [tempWeight, setTempWeight] = useState("");
+
   const {
     routine,
     currentExerciseIndex,
@@ -211,6 +239,12 @@ export default function ActiveRoutinePage() {
     isWorkoutRunning,
   } = state;
 
+  const currentSetIndex = completedSets[currentExerciseIndex] || 0;
+
+  const [isModified, setIsModified] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+
+  const originalRoutineRef = useRef<SavedRoutine | null>(null);
   /* ===============================
       Helper Functions
   ================================ */
@@ -258,13 +292,23 @@ export default function ActiveRoutinePage() {
       return;
     }
     const parsed = JSON.parse(stored);
+    const convertedRoutine = {
+      ...parsed.routine,
+      exercises: parsed.routine.exercises.map((ex: any) => ({
+        ...ex,
+        reps: Array.isArray(ex.reps) ? ex.reps : Array(ex.sets).fill(ex.reps),
+        weight: Array.isArray(ex.weight)
+          ? ex.weight
+          : Array(ex.sets).fill(ex.weight),
+      })),
+    };
     const sound = localStorage.getItem("soundEnabled");
     const vibration = localStorage.getItem("vibrationEnabled");
 
     dispatch({
       type: "INIT",
       payload: {
-        routine: parsed.routine,
+        routine: convertedRoutine,
         currentExerciseIndex: parsed.currentExerciseIndex,
         completedSets: parsed.completedSets,
         elapsedTime: parsed.elapsedTime,
@@ -272,6 +316,8 @@ export default function ActiveRoutinePage() {
         isVibrationEnabled: vibration !== null ? JSON.parse(vibration) : true,
       },
     });
+
+    originalRoutineRef.current = parsed.routine;
 
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
@@ -428,6 +474,7 @@ export default function ActiveRoutinePage() {
 
   const addSet = () => {
     if (!routine) return;
+    setIsModified(true);
     const updatedRoutine = {
       ...routine,
       exercises: routine.exercises.map((ex, idx) => {
@@ -436,6 +483,7 @@ export default function ActiveRoutinePage() {
           ...ex,
           sets: ex.sets + 1,
           reps: [...ex.reps, ex.reps[ex.reps.length - 1] || 10],
+          weight: [...ex.weight, ex.weight[ex.weight.length - 1] || 0],
         };
       }),
     };
@@ -446,7 +494,7 @@ export default function ActiveRoutinePage() {
 
   const removeSet = () => {
     if (!routine || currentExercise!.sets <= 1) return;
-
+    setIsModified(true);
     const updatedRoutine = {
       ...routine,
       exercises: routine.exercises.map((ex, idx) => {
@@ -455,6 +503,7 @@ export default function ActiveRoutinePage() {
           ...ex,
           sets: ex.sets - 1,
           reps: ex.reps.slice(0, -1),
+          weight: ex.weight.slice(0, -1),
         };
       }),
     };
@@ -465,14 +514,14 @@ export default function ActiveRoutinePage() {
       updatedRoutine.exercises[currentExerciseIndex].sets,
     );
 
-    // ✅ 1. 먼저 상태 반영
+    // 1. 먼저 상태 반영
     dispatch({
       type: "REMOVE_SET",
       newRoutine: updatedRoutine,
       newCompleted,
     });
 
-    // ✅ 2. 그 다음 완료 체크
+    // 2. 그 다음 완료 체크
     const isAllFinished = updatedRoutine.exercises.every(
       (ex, i) => (newCompleted[i] || 0) >= ex.sets,
     );
@@ -489,16 +538,41 @@ export default function ActiveRoutinePage() {
 
   const updateReps = (setIndex: number, delta: number) => {
     if (!routine) return;
+    setIsModified(true);
     const updatedRoutine = {
       ...routine,
       exercises: routine.exercises.map((ex, idx) => {
         if (idx !== currentExerciseIndex) return ex;
         const newReps = [...ex.reps];
-        newReps[setIndex] = Math.max(1, newReps[setIndex] + delta);
+        newReps[setIndex] = Math.max(1, (newReps[setIndex] || 0) + delta);
         return { ...ex, reps: newReps };
       }),
     };
     dispatch({ type: "UPDATE_REPS", newRoutine: updatedRoutine });
+  };
+
+  const updateWeight = (setIndex: number, delta: number) => {
+    if (!routine) return;
+    setIsModified(true);
+
+    const updatedRoutine = {
+      ...routine,
+      exercises: routine.exercises.map((ex, idx) => {
+        if (idx !== currentExerciseIndex) return ex;
+
+        const baseWeight = Array.isArray(ex.weight)
+          ? ex.weight
+          : Array(ex.sets).fill(0);
+
+        const newWeight = [...baseWeight];
+
+        newWeight[setIndex] = Math.max(0, (newWeight[setIndex] || 0) + delta);
+
+        return { ...ex, weight: newWeight };
+      }),
+    };
+
+    dispatch({ type: "UPDATE_WEIGHT", newRoutine: updatedRoutine });
   };
 
   const saveWorkoutHistory = (routine: SavedRoutine) => {
@@ -525,6 +599,26 @@ export default function ActiveRoutinePage() {
     localStorage.setItem("workout-history", JSON.stringify(history));
   };
 
+  const finishWorkout = () => {
+    localStorage.removeItem("activeWorkout");
+    saveWorkoutDate();
+    router.push("/routines");
+  };
+  /* ===============================
+      루틴 업데이트 함수
+  ================================ */
+  const updateRoutineInStorage = () => {
+    if (!routine) return;
+
+    const stored = localStorage.getItem("savedRoutines");
+    if (!stored) return;
+
+    const parsed: SavedRoutine[] = JSON.parse(stored);
+
+    const updated = parsed.map((r) => (r.id === routine.id ? routine : r));
+
+    localStorage.setItem("savedRoutines", JSON.stringify(updated));
+  };
   /* ===============================
       Memoized Stats
   ================================ */
@@ -589,15 +683,32 @@ export default function ActiveRoutinePage() {
           </div>
           <button
             onClick={() => {
-              localStorage.removeItem("activeWorkout");
-              saveWorkoutDate();
-              router.push("/routines");
+              if (isModified) {
+                setIsUpdateModalOpen(true);
+                console.log("완료");
+              } else {
+                finishWorkout();
+              }
             }}
             className="mt-6 bg-black text-white px-6 py-3 rounded-xl hover:opacity-90"
           >
             완료
           </button>
         </div>
+        <ConfirmModal
+          open={isUpdateModalOpen}
+          onOpenChange={setIsUpdateModalOpen}
+          title="루틴 업데이트"
+          description="방금 수행한 루틴으로 업데이트 하시겠습니까?"
+          confirmText="업데이트"
+          onConfirm={() => {
+            updateRoutineInStorage();
+            finishWorkout();
+          }}
+          onCancel={() => {
+            finishWorkout();
+          }}
+        />
       </div>
     );
   }
@@ -632,20 +743,100 @@ export default function ActiveRoutinePage() {
         {/* 현재 운동 카드 */}
         <div className="bg-white rounded-2xl p-8 shadow-sm space-y-6">
           <h3 className="text-2xl font-bold">{currentExercise.name}</h3>
-          <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-4 gap-4 text-center">
             <div className="bg-gray-100 p-4 rounded-xl">
               <p className="text-2xl font-bold">{currentExercise.sets}</p>
               <p className="text-sm text-gray-500">세트</p>
             </div>
-            <div className="bg-gray-100 p-4 rounded-xl">
-              <p className="text-2xl font-bold">
-                {currentExercise.reps[completedSets[currentExerciseIndex] || 0]}
-              </p>
+            <div
+              className="bg-gray-100 p-4 rounded-xl cursor-pointer hover:bg-gray-200"
+              onClick={() => {
+                setEditingReps(true);
+                setTempReps(
+                  String(currentExercise.reps[currentSetIndex] || ""),
+                );
+              }}
+            >
+              {editingReps ? (
+                <input
+                  type="number"
+                  value={tempReps}
+                  autoFocus
+                  onChange={(e) => setTempReps(e.target.value)}
+                  onBlur={() => {
+                    const value = Math.max(1, Number(tempReps) || 1);
+                    updateReps(
+                      currentSetIndex,
+                      value - currentExercise.reps[currentSetIndex] || 0,
+                    );
+                    setEditingReps(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const value = Math.max(1, Number(tempReps) || 1);
+                      updateReps(
+                        currentSetIndex,
+                        value - currentExercise.reps[currentSetIndex] || 0,
+                      );
+                      setEditingReps(false);
+                    }
+                  }}
+                  className="text-2xl font-bold bg-transparent outline-none w-full text-center"
+                />
+              ) : (
+                <p className="relative text-2xl font-bold text-center">
+                  <SquarePen className="absolute -right-2 -top-1/4 size-4 md:right-0 md:top-1/2 md:-translate-y-1/2 opacity-60" />
+                  {currentExercise.reps[currentSetIndex]}
+                </p>
+              )}
               <p className="text-sm text-gray-500">반복</p>
             </div>
+            <div
+              className="bg-gray-100 p-4 rounded-xl cursor-pointer"
+              onClick={() => {
+                setEditingWeight(true);
+                setTempWeight(
+                  String(currentExercise.weight[currentSetIndex] || ""),
+                );
+              }}
+            >
+              {editingWeight ? (
+                <input
+                  type="number"
+                  value={tempWeight}
+                  autoFocus
+                  onChange={(e) => setTempWeight(e.target.value)}
+                  onBlur={() => {
+                    const value = Math.max(0, Number(tempWeight) || 0);
+                    updateWeight(
+                      currentSetIndex,
+                      value - (currentExercise.weight[currentSetIndex] || 0),
+                    );
+                    setEditingWeight(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const value = Math.max(0, Number(tempWeight) || 0);
+                      updateWeight(
+                        currentSetIndex,
+                        value - (currentExercise.weight[currentSetIndex] || 0),
+                      );
+                      setEditingWeight(false);
+                    }
+                  }}
+                  className="text-2xl font-bold bg-transparent outline-none w-full text-center"
+                />
+              ) : (
+                <p className="relative text-2xl font-bold text-center">
+                  <SquarePen className="absolute -right-2 -top-1/4 size-4 md:right-0 md:top-1/2 md:-translate-y-1/2 opacity-60" />
+                  {currentExercise.weight[currentSetIndex]}
+                </p>
+              )}
+              <p className="text-sm text-gray-500">kg</p>
+            </div>
             <div className="bg-gray-100 p-4 rounded-xl">
-              <p className="text-2xl font-bold">{currentExercise.rest}초</p>
-              <p className="text-sm text-gray-500">휴식</p>
+              <p className="text-2xl font-bold">{currentExercise.rest}</p>
+              <p className="text-sm text-gray-500">초 휴식</p>
             </div>
           </div>
 

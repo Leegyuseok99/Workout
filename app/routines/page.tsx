@@ -25,6 +25,8 @@ export default function RoutinesPage() {
   const [routines, setRoutines] = useState<SavedRoutine[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<SavedRoutine | null>(null);
   const [open, setOpen] = useState(false);
+  const getMaxReps = (reps: number | number[]) =>
+    Array.isArray(reps) ? Math.max(...reps) : reps;
 
   /* ===============================
      localStorage 불러오기
@@ -127,7 +129,7 @@ export default function RoutinesPage() {
                 <ul className="space-y-1 text-sm text-gray-600 mb-5 min-h-[100px]">
                   {routine.exercises.slice(0, 3).map((ex) => (
                     <li key={ex.id}>
-                      • {ex.name} ({ex.sets} x {ex.reps})
+                      • {ex.name} ({ex.sets} x {getMaxReps(ex.reps)})
                     </li>
                   ))}
 
