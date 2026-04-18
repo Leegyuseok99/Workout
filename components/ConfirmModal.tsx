@@ -28,7 +28,7 @@ export default function ConfirmModal({
         <Dialog.Overlay className="fixed inset-0 bg-black/40 z-50" />
 
         {/* Content */}
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 w-[420px] -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-2xl shadow-2xl">
+        <Dialog.Content className="w-96 fixed top-1/2 left-1/2 z-50 md:w-[420px] -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-2xl shadow-2xl">
           <Dialog.Title className="text-lg font-bold mb-3">
             {title}
           </Dialog.Title>
